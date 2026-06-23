@@ -37,6 +37,7 @@ class RecommendationService : Service() {
     private val handler = Handler(Looper.getMainLooper())
     private var target = DEFAULT_DAILY_TARGET
     private var today = 0
+    private var isProcessing = false
     private val generatedNumbers = mutableSetOf<String>()
 
     private val worker = object : Runnable {
@@ -49,14 +50,28 @@ class RecommendationService : Service() {
             if (today >= target) {
                 lastLog = "Daily target reached"
                 saveLog(this@RecommendationService, "[INFO] Daily target reached: $target")
+                updateNotification()
                 onUpdate?.invoke()
                 stopServiceSafely()
                 return
             }
 
+            if (isProcessing) {
+                scheduleNextRun()
+                return
+            }
+
+            val pauseRemaining = AutomationPauseManager.getRemainingPauseMs(this@RecommendationService)
+            if (pauseRemaining > 0L) {
+                lastLog = "Paused for ${AutomationPauseManager.describeRemaining(pauseRemaining)}"
+                updateNotification()
+                onUpdate?.invoke()
+                scheduleNextRun(pauseRemaining)
+                return
+            }
+
             val nextPhone = pickNextPhone()
             processPhone(nextPhone)
-            handler.postDelayed(this, RUN_INTERVAL_MS)
         }
     }
 
@@ -131,6 +146,7 @@ class RecommendationService : Service() {
     }
 
     private fun processPhone(phone: String) {
+        isProcessing = true
         val code = "*180*5*4*$phone*1#"
         totalAttempts++
         today++
@@ -138,6 +154,16 @@ class RecommendationService : Service() {
         val simLabel = SimSelection.getSelectedSimLabel(this)
         val now = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date())
         val time = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
+        lastLog = "Processing $phone"
+        updateNotification()
+        onUpdate?.invoke()
+
+        fun finishProcessing() {
+            isProcessing = false
+            updateNotification()
+            onUpdate?.invoke()
+            scheduleNextRun(resolveNextDelay())
+        }
 
         try {
             val telephonyManager = SimSelection.getTelephonyManager(this)
@@ -187,6 +213,7 @@ class RecommendationService : Service() {
 
                     updateNotification()
                     onUpdate?.invoke()
+                    finishProcessing()
                 },
                 err = { error ->
                     failedCount++
@@ -196,6 +223,7 @@ class RecommendationService : Service() {
                     saveLog(this, "[$now $time] ERROR [$simLabel]: $phone")
                     updateNotification()
                     onUpdate?.invoke()
+                    finishProcessing()
                 },
             )
 
@@ -208,6 +236,7 @@ class RecommendationService : Service() {
                 )
                 updateNotification()
                 onUpdate?.invoke()
+                finishProcessing()
             }
         } catch (e: Exception) {
             failedCount++
@@ -215,11 +244,13 @@ class RecommendationService : Service() {
             saveLog(this, "[$now $time] ERROR [$simLabel]: ${e.javaClass.simpleName}: ${e.message.orEmpty()}")
             updateNotification()
             onUpdate?.invoke()
+            finishProcessing()
         }
     }
 
     private fun stopServiceSafely() {
         isRunning = false
+        isProcessing = false
         handler.removeCallbacks(worker)
         lastLog = "Stopped"
         onUpdate?.invoke()
@@ -229,6 +260,7 @@ class RecommendationService : Service() {
 
     override fun onDestroy() {
         isRunning = false
+        isProcessing = false
         handler.removeCallbacks(worker)
         super.onDestroy()
     }
@@ -250,7 +282,15 @@ class RecommendationService : Service() {
             Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
-        val status = "Running in background | Success: $successCount | ${SimSelection.getSelectedSimLabel(this)}"
+        val pauseRemaining = AutomationPauseManager.getRemainingPauseMs(this)
+        val status = when {
+            pauseRemaining > 0L ->
+                "Paused ${AutomationPauseManager.describeRemaining(pauseRemaining)} | ${SimSelection.getSelectedSimLabel(this)}"
+            isProcessing ->
+                "Recommending one number | ${SimSelection.getSelectedSimLabel(this)}"
+            else ->
+                "Running in background | Success: $successCount | ${SimSelection.getSelectedSimLabel(this)}"
+        }
 
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             Notification.Builder(this, CHANNEL_ID)
@@ -279,6 +319,17 @@ class RecommendationService : Service() {
             .edit()
             .putBoolean(KEY_KEEP_SERVICE_RUNNING, shouldKeepRunning)
             .apply()
+    }
+
+    private fun scheduleNextRun(delayMs: Long = RUN_INTERVAL_MS) {
+        if (!isRunning) return
+        handler.removeCallbacks(worker)
+        handler.postDelayed(worker, delayMs.coerceAtLeast(0L))
+    }
+
+    private fun resolveNextDelay(): Long {
+        val pauseRemaining = AutomationPauseManager.getRemainingPauseMs(this)
+        return maxOf(RUN_INTERVAL_MS, pauseRemaining)
     }
 
     private fun sanitizeLog(value: String): String = value.replace("\n", " ").trim()
