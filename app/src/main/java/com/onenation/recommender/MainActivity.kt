@@ -1015,7 +1015,7 @@ fun Settings() {
         }
 
         Text(
-            text = "One Nation v1.0.10",
+            text = "One Nation v1.0.11",
             modifier = Modifier.fillMaxWidth(),
             textAlign = TextAlign.Center,
             color = C.Text3,
