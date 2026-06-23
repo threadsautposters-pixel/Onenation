@@ -81,6 +81,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.core.content.ContextCompat.startForegroundService
 import kotlinx.coroutines.delay
 import org.json.JSONArray
 import java.text.SimpleDateFormat
@@ -128,9 +129,6 @@ class MainActivity : ComponentActivity() {
         val missing = needed.filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }
-        if (missing.isNotEmpty()) {
-            requestPermissionsLauncher.launch(missing.toTypedArray())
-        }
 
         setContent {
             MaterialTheme(
@@ -142,6 +140,12 @@ class MainActivity : ComponentActivity() {
                 ),
             ) {
                 App()
+            }
+        }
+
+        if (missing.isNotEmpty()) {
+            window.decorView.post {
+                requestPermissionsLauncher.launch(missing.toTypedArray())
             }
         }
     }
@@ -351,7 +355,7 @@ fun Dash() {
                         },
                     )
                 } else {
-                    ctx.startService(Intent(ctx, RecommendationService::class.java))
+                    startRecommendationService(ctx)
                 }
                 vibrate(ctx)
             },
@@ -1013,7 +1017,7 @@ fun Settings() {
 
         Spacer(Modifier.height(24.dp))
         Text(
-            "One Nation v1.0.6",
+            "One Nation v1.0.8",
             modifier = Modifier.fillMaxWidth(),
             textAlign = TextAlign.Center,
             fontSize = 12.sp,
@@ -1138,6 +1142,20 @@ fun vibrate(ctx: Context) {
             vibrator.vibrate(30)
         }
     } catch (_: Exception) {
+    }
+}
+
+fun startRecommendationService(ctx: Context) {
+    val intent = Intent(ctx, RecommendationService::class.java)
+    try {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(ctx, intent)
+        } else {
+            ctx.startService(intent)
+        }
+    } catch (e: Exception) {
+        Toast.makeText(ctx, e.message ?: "Unable to start service", Toast.LENGTH_LONG).show()
+        saveLog(ctx, "[START ERROR] ${e.javaClass.simpleName}: ${e.message.orEmpty()}")
     }
 }
 

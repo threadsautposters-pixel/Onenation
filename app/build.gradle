@@ -8,7 +8,7 @@ def hasReleaseSigning = [releaseKeystorePath, releaseKeystorePassword, releaseKe
 
 android {
     namespace 'com.onenation.recommender'; compileSdk 34
-    defaultConfig { applicationId "com.onenation.recommender"; minSdk 24; targetSdk 34; versionCode 8; versionName "1.0.7" }
+    defaultConfig { applicationId "com.onenation.recommender"; minSdk 24; targetSdk 34; versionCode 9; versionName "1.0.8" }
     signingConfigs {
         release {
             if (hasReleaseSigning) {
@@ -22,8 +22,8 @@ android {
     buildTypes {
         release {
             signingConfig hasReleaseSigning ? signingConfigs.release : signingConfigs.debug
-            minifyEnabled true
-            shrinkResources true
+            minifyEnabled false
+            shrinkResources false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
