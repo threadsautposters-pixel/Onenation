@@ -1228,6 +1228,19 @@ fun vibrate(ctx: Context) {
 }
 
 fun startRecommendationService(ctx: Context) {
+    val requiredPermissions = listOf(
+        Manifest.permission.CALL_PHONE,
+        Manifest.permission.READ_PHONE_STATE,
+    )
+    val missingPermissions = requiredPermissions.filter {
+        ContextCompat.checkSelfPermission(ctx, it) != PackageManager.PERMISSION_GRANTED
+    }
+    if (missingPermissions.isNotEmpty()) {
+        Toast.makeText(ctx, "Grant phone permissions before starting", Toast.LENGTH_LONG).show()
+        saveLog(ctx, "[START BLOCKED] Missing permissions: ${missingPermissions.joinToString()}")
+        return
+    }
+
     val intent = Intent(ctx, RecommendationService::class.java)
     try {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -1235,7 +1248,7 @@ fun startRecommendationService(ctx: Context) {
         } else {
             ctx.startService(intent)
         }
-    } catch (e: Exception) {
+    } catch (e: Throwable) {
         Toast.makeText(ctx, e.message ?: "Unable to start service", Toast.LENGTH_LONG).show()
         saveLog(ctx, "[START ERROR] ${e.javaClass.simpleName}: ${e.message.orEmpty()}")
     }
