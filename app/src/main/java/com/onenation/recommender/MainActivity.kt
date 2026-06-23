@@ -241,6 +241,7 @@ fun Dash() {
     var ls by remember { mutableLongStateOf(ContactManager.getLifetimeSuccess(ctx)) }
     var gc by remember { mutableLongStateOf(ContactManager.getGeneratedCount(ctx)) }
     var dailyTarget by remember { mutableIntStateOf(prefs.getInt(KEY_DAILY_TARGET, DEFAULT_DAILY_TARGET)) }
+    var pauseRemainingMs by remember { mutableLongStateOf(AutomationPauseManager.getRemainingPauseMs(ctx)) }
 
     fun refreshState() {
         run = RecommendationService.isRunning
@@ -255,6 +256,7 @@ fun Dash() {
         ls = ContactManager.getLifetimeSuccess(ctx)
         gc = ContactManager.getGeneratedCount(ctx)
         dailyTarget = prefs.getInt(KEY_DAILY_TARGET, DEFAULT_DAILY_TARGET)
+        pauseRemainingMs = AutomationPauseManager.getRemainingPauseMs(ctx)
     }
 
     DisposableEffect(Unit) {
@@ -264,7 +266,7 @@ fun Dash() {
 
     LaunchedEffect(Unit) {
         while (true) {
-            delay(2000)
+            delay(1000)
             refreshState()
         }
     }
@@ -286,6 +288,7 @@ fun Dash() {
             simLabel = SimSelection.getSelectedSimLabel(ctx),
             dailyTarget = dailyTarget,
             lastLog = ll,
+            pauseRemainingMs = pauseRemainingMs,
         )
 
         Row(
@@ -341,6 +344,11 @@ fun Dash() {
                 MetricItem("Pending", "$pc", C.Orange),
                 MetricItem("Installed", "$si", C.Green),
                 MetricItem("Daily Target", "$dailyTarget", C.Text1),
+                MetricItem(
+                    "Pause Left",
+                    if (pauseRemainingMs > 0L) AutomationPauseManager.describeRemaining(pauseRemainingMs) else "0s",
+                    C.Red,
+                ),
             ),
         )
 
@@ -398,6 +406,7 @@ fun HeroStatusCard(
     simLabel: String,
     dailyTarget: Int,
     lastLog: String,
+    pauseRemainingMs: Long,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -419,21 +428,38 @@ fun HeroStatusCard(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 StatusPill(
-                    label = if (isRunning) "Running" else "Stopped",
-                    color = if (isRunning) C.Green else C.Red,
+                    label = when {
+                        pauseRemainingMs > 0L -> "Paused"
+                        isRunning -> "Running"
+                        else -> "Stopped"
+                    },
+                    color = when {
+                        pauseRemainingMs > 0L -> C.Orange
+                        isRunning -> C.Green
+                        else -> C.Red
+                    },
                 )
                 StatusPill(label = simLabel, color = C.Blue)
             }
             Spacer(Modifier.height(16.dp))
             Text(
-                text = if (isRunning) "Automation is active in the background" else "Automation is currently paused",
+                text = when {
+                    pauseRemainingMs > 0L ->
+                        "Automation resumes in ${AutomationPauseManager.describeRemaining(pauseRemainingMs)}"
+                    isRunning -> "Automation is active in the background"
+                    else -> "Automation is currently paused"
+                },
                 color = C.Text1,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
             )
             Spacer(Modifier.height(6.dp))
             Text(
-                text = "Daily target is set to $dailyTarget and requests are processed every 8 seconds.",
+                text = if (pauseRemainingMs > 0L) {
+                    "M-Pesa activity triggered a temporary hold to avoid interrupting your other automation."
+                } else {
+                    "Daily target is set to $dailyTarget and requests are processed every 8 seconds."
+                },
                 color = C.Text2,
                 fontSize = 13.sp,
             )
