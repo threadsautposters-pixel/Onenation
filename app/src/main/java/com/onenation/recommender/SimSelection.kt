@@ -9,15 +9,17 @@ import android.telephony.TelephonyManager
 data class SimOption(val subscriptionId: Int, val slotIndex: Int, val label: String)
 
 object SimSelection {
-    private const val PREFS = "onenation_settings"
-    private const val KEY_SUBSCRIPTION_ID = "sim_subscription_id"
     const val AUTO_SUBSCRIPTION_ID = -1
 
     fun getStoredSubscriptionId(ctx: Context): Int =
-        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getInt(KEY_SUBSCRIPTION_ID, AUTO_SUBSCRIPTION_ID)
+        ctx.getSharedPreferences(SETTINGS_PREFS, Context.MODE_PRIVATE)
+            .getInt(KEY_SIM_SUBSCRIPTION_ID, AUTO_SUBSCRIPTION_ID)
 
     fun saveSelectedSubscriptionId(ctx: Context, subscriptionId: Int) {
-        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putInt(KEY_SUBSCRIPTION_ID, subscriptionId).apply()
+        ctx.getSharedPreferences(SETTINGS_PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putInt(KEY_SIM_SUBSCRIPTION_ID, subscriptionId)
+            .apply()
     }
 
     @SuppressLint("MissingPermission")
