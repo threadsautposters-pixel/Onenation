@@ -242,6 +242,7 @@ fun Dash() {
     var gc by remember { mutableLongStateOf(ContactManager.getGeneratedCount(ctx)) }
     var dailyTarget by remember { mutableIntStateOf(prefs.getInt(KEY_DAILY_TARGET, DEFAULT_DAILY_TARGET)) }
     var pauseRemainingMs by remember { mutableLongStateOf(AutomationPauseManager.getRemainingPauseMs(ctx)) }
+    var callInProgress by remember { mutableStateOf(CallStateManager.isCallInProgress(ctx)) }
 
     fun refreshState() {
         run = RecommendationService.isRunning
@@ -257,6 +258,7 @@ fun Dash() {
         gc = ContactManager.getGeneratedCount(ctx)
         dailyTarget = prefs.getInt(KEY_DAILY_TARGET, DEFAULT_DAILY_TARGET)
         pauseRemainingMs = AutomationPauseManager.getRemainingPauseMs(ctx)
+        callInProgress = CallStateManager.isCallInProgress(ctx)
     }
 
     DisposableEffect(Unit) {
@@ -289,6 +291,7 @@ fun Dash() {
             dailyTarget = dailyTarget,
             lastLog = ll,
             pauseRemainingMs = pauseRemainingMs,
+            callInProgress = callInProgress,
         )
 
         Row(
@@ -349,6 +352,7 @@ fun Dash() {
                     if (pauseRemainingMs > 0L) AutomationPauseManager.describeRemaining(pauseRemainingMs) else "0s",
                     C.Red,
                 ),
+                MetricItem("Call State", if (callInProgress) "Busy" else "Idle", C.Orange),
             ),
         )
 
@@ -407,6 +411,7 @@ fun HeroStatusCard(
     dailyTarget: Int,
     lastLog: String,
     pauseRemainingMs: Long,
+    callInProgress: Boolean,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -430,11 +435,13 @@ fun HeroStatusCard(
                 StatusPill(
                     label = when {
                         pauseRemainingMs > 0L -> "Paused"
+                        callInProgress -> "On Call"
                         isRunning -> "Running"
                         else -> "Stopped"
                     },
                     color = when {
                         pauseRemainingMs > 0L -> C.Orange
+                        callInProgress -> C.Orange
                         isRunning -> C.Green
                         else -> C.Red
                     },
@@ -446,6 +453,7 @@ fun HeroStatusCard(
                 text = when {
                     pauseRemainingMs > 0L ->
                         "Automation resumes in ${AutomationPauseManager.describeRemaining(pauseRemainingMs)}"
+                    callInProgress -> "Automation waits until the current call has finished"
                     isRunning -> "Automation is active in the background"
                     else -> "Automation is currently paused"
                 },
@@ -457,6 +465,8 @@ fun HeroStatusCard(
             Text(
                 text = if (pauseRemainingMs > 0L) {
                     "M-Pesa activity triggered a temporary hold to avoid interrupting your other automation."
+                } else if (callInProgress) {
+                    "Incoming or ongoing calls pause recommendations automatically until the line is idle."
                 } else {
                     "Daily target is set to $dailyTarget and requests are processed every 8 seconds."
                 },

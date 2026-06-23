@@ -24,6 +24,7 @@ class RecommendationService : Service() {
         private const val CHANNEL_ID = "on"
         private const val NOTIFICATION_ID = 4001
         private const val RUN_INTERVAL_MS = 8_000L
+        private const val PAUSE_POLL_MS = 2_000L
 
         var isRunning = false
         var successCount = 0
@@ -39,6 +40,12 @@ class RecommendationService : Service() {
     private var today = 0
     private var isProcessing = false
     private val generatedNumbers = mutableSetOf<String>()
+
+    private sealed interface QueueDecision {
+        data class Process(val phone: String) : QueueDecision
+
+        data class Wait(val delayMs: Long, val reason: String) : QueueDecision
+    }
 
     private val worker = object : Runnable {
         override fun run() {
@@ -70,8 +77,23 @@ class RecommendationService : Service() {
                 return
             }
 
-            val nextPhone = pickNextPhone()
-            processPhone(nextPhone)
+            if (CallStateManager.isCallInProgress(this@RecommendationService)) {
+                lastLog = "Paused while call is active"
+                updateNotification()
+                onUpdate?.invoke()
+                scheduleNextRun(PAUSE_POLL_MS)
+                return
+            }
+
+            when (val decision = pickNextPhone()) {
+                is QueueDecision.Process -> processPhone(decision.phone)
+                is QueueDecision.Wait -> {
+                    lastLog = decision.reason
+                    updateNotification()
+                    onUpdate?.invoke()
+                    scheduleNextRun(decision.delayMs)
+                }
+            }
         }
     }
 
@@ -124,13 +146,31 @@ class RecommendationService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
-    private fun pickNextPhone(): String {
+    private fun pickNextPhone(): QueueDecision {
         val due = ContactManager.getDueForRetry(this)
-        if (due.isNotEmpty()) return due.first().phone
+        if (due.isNotEmpty()) return QueueDecision.Process(due.first().phone)
 
         val pending = ContactManager.getPending(this).firstOrNull { it.nextRetryTime.isBlank() }
-        if (pending != null) return pending.phone
+        if (pending != null) return QueueDecision.Process(pending.phone)
 
+        if (ContactManager.getGenerationCredits(this) > 0) {
+            val generated = generateNewPhone()
+            ContactManager.consumeGenerationCredit(this)
+            return QueueDecision.Process(generated)
+        }
+
+        val nextRetryDelay = ContactManager.getNextRetryDelayMs(this)
+        if (nextRetryDelay != null) {
+            return QueueDecision.Wait(
+                delayMs = nextRetryDelay,
+                reason = "Waiting ${AutomationPauseManager.describeRemaining(nextRetryDelay)} for scheduled resend",
+            )
+        }
+
+        return QueueDecision.Process(generateNewPhone())
+    }
+
+    private fun generateNewPhone(): String {
         var generated: String
         do {
             generated = NumberGenerator.generate()
@@ -286,6 +326,8 @@ class RecommendationService : Service() {
         val status = when {
             pauseRemaining > 0L ->
                 "Paused ${AutomationPauseManager.describeRemaining(pauseRemaining)} | ${SimSelection.getSelectedSimLabel(this)}"
+            CallStateManager.isCallInProgress(this) ->
+                "Paused during call | ${SimSelection.getSelectedSimLabel(this)}"
             isProcessing ->
                 "Recommending one number | ${SimSelection.getSelectedSimLabel(this)}"
             else ->
@@ -328,6 +370,10 @@ class RecommendationService : Service() {
     }
 
     private fun resolveNextDelay(): Long {
+        if (CallStateManager.isCallInProgress(this)) {
+            return PAUSE_POLL_MS
+        }
+
         val pauseRemaining = AutomationPauseManager.getRemainingPauseMs(this)
         return maxOf(RUN_INTERVAL_MS, pauseRemaining)
     }
