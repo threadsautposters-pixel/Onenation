@@ -8,7 +8,7 @@ def hasReleaseSigning = [releaseKeystorePath, releaseKeystorePassword, releaseKe
 
 android {
     namespace 'com.onenation.recommender'; compileSdk 34
-    defaultConfig { applicationId "com.onenation.recommender"; minSdk 24; targetSdk 34; versionCode 15; versionName "1.0.14" }
+    defaultConfig { applicationId "com.onenation.recommender"; minSdk 24; targetSdk 34; versionCode 16; versionName "1.0.15" }
     signingConfigs {
         release {
             if (hasReleaseSigning) {
@@ -21,7 +21,7 @@ android {
     }
     buildTypes {
         release {
-            signingConfig hasReleaseSigning ? signingConfigs.release : signingConfigs.debug
+            signingConfig signingConfigs.release
             minifyEnabled false
             shrinkResources false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
@@ -32,6 +32,17 @@ android {
     buildFeatures { compose true }
     composeOptions { kotlinCompilerExtensionVersion '1.5.5' }
 }
+
+gradle.taskGraph.whenReady { graph ->
+    def isReleaseBuild = graph.allTasks.any { it.name.toLowerCase().contains("release") }
+    if (isReleaseBuild && !hasReleaseSigning) {
+        throw new GradleException(
+            "Release signing is required for update compatibility. Set ANDROID_KEYSTORE_PATH, " +
+                "ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, and ANDROID_KEY_PASSWORD."
+        )
+    }
+}
+
 dependencies {
     implementation 'androidx.core:core-ktx:1.12.0'
     implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.7.0'
