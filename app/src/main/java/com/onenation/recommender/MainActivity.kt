@@ -35,6 +35,18 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.ListAlt
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Contacts
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.DeleteForever
+import androidx.compose.material.icons.outlined.Group
+import androidx.compose.material.icons.outlined.ListAlt
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -1003,7 +1015,7 @@ fun Settings() {
         }
 
         Text(
-            text = "One Nation v1.0.9",
+            text = "One Nation v1.0.10",
             modifier = Modifier.fillMaxWidth(),
             textAlign = TextAlign.Center,
             color = C.Text3,
