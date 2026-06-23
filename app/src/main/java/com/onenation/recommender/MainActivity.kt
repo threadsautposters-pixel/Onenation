@@ -35,8 +35,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -71,6 +69,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -89,26 +88,31 @@ import java.util.Date
 import java.util.Locale
 
 private object C {
-    val Bg = Color(0xFF0A0E17)
-    val Surface = Color(0xFF111827)
-    val Card = Color(0xFF1A2332)
+    val Bg = Color(0xFF09111F)
+    val Surface = Color(0xFF0F172A)
+    val Card = Color(0xFF182235)
+    val CardAlt = Color(0xFF101A2B)
+    val Border = Color(0xFF25334A)
     val Green = Color(0xFF10B981)
-    val GreenDim = Color(0xFF10B981).copy(alpha = 0.15f)
+    val GreenDim = Color(0xFF10B981).copy(alpha = 0.16f)
     val Blue = Color(0xFF3B82F6)
+    val BlueDim = Color(0xFF3B82F6).copy(alpha = 0.16f)
     val Orange = Color(0xFFF59E0B)
+    val OrangeDim = Color(0xFFF59E0B).copy(alpha = 0.16f)
     val Red = Color(0xFFEF4444)
+    val RedDim = Color(0xFFEF4444).copy(alpha = 0.16f)
     val Purple = Color(0xFF8B5CF6)
     val Cyan = Color(0xFF06B6D4)
-    val Text1 = Color(0xFFF1F5F9)
-    val Text2 = Color(0xFF94A3B8)
-    val Text3 = Color(0xFF64748B)
+    val Text1 = Color(0xFFF8FAFC)
+    val Text2 = Color(0xFFB8C5D6)
+    val Text3 = Color(0xFF71839B)
 }
 
 class MainActivity : ComponentActivity() {
     private val requestPermissionsLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { granted ->
             if (!granted.values.all { it }) {
-                Toast.makeText(this, "Permissions required", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, "Required permissions were not fully granted", Toast.LENGTH_LONG).show()
             }
         }
 
@@ -167,7 +171,7 @@ fun App() {
         bottomBar = {
             NavigationBar(
                 containerColor = C.Surface,
-                modifier = Modifier.height(64.dp),
+                modifier = Modifier.height(70.dp),
             ) {
                 tabs.forEachIndexed { index, (label, icon) ->
                     NavigationBarItem(
@@ -178,11 +182,7 @@ fun App() {
                             Text(
                                 text = label,
                                 fontSize = 11.sp,
-                                fontWeight = if (selectedTab == index) {
-                                    FontWeight.SemiBold
-                                } else {
-                                    FontWeight.Normal
-                                },
+                                fontWeight = if (selectedTab == index) FontWeight.SemiBold else FontWeight.Normal,
                             )
                         },
                         colors = NavigationBarItemDefaults.colors(
@@ -198,7 +198,7 @@ fun App() {
         },
     ) { paddingValues ->
         Box(
-            Modifier
+            modifier = Modifier
                 .padding(paddingValues)
                 .fillMaxSize(),
         ) {
@@ -216,6 +216,7 @@ fun App() {
 @Composable
 fun Dash() {
     val ctx = LocalContext.current
+    val prefs = ctx.getSharedPreferences(SETTINGS_PREFS, Context.MODE_PRIVATE)
     var run by remember { mutableStateOf(RecommendationService.isRunning) }
     var sc by remember { mutableIntStateOf(RecommendationService.successCount) }
     var ta by remember { mutableIntStateOf(RecommendationService.totalAttempts) }
@@ -227,127 +228,64 @@ fun Dash() {
     var lt by remember { mutableLongStateOf(ContactManager.getLifetimeTotal(ctx)) }
     var ls by remember { mutableLongStateOf(ContactManager.getLifetimeSuccess(ctx)) }
     var gc by remember { mutableLongStateOf(ContactManager.getGeneratedCount(ctx)) }
+    var dailyTarget by remember { mutableIntStateOf(prefs.getInt(KEY_DAILY_TARGET, DEFAULT_DAILY_TARGET)) }
+
+    fun refreshState() {
+        run = RecommendationService.isRunning
+        sc = RecommendationService.successCount
+        ta = RecommendationService.totalAttempts
+        fc = RecommendationService.failedCount
+        ic = RecommendationService.installedCount
+        ll = RecommendationService.lastLog
+        pc = ContactManager.getPendingCount(ctx)
+        si = ContactManager.getInstalledCount(ctx)
+        lt = ContactManager.getLifetimeTotal(ctx)
+        ls = ContactManager.getLifetimeSuccess(ctx)
+        gc = ContactManager.getGeneratedCount(ctx)
+        dailyTarget = prefs.getInt(KEY_DAILY_TARGET, DEFAULT_DAILY_TARGET)
+    }
 
     DisposableEffect(Unit) {
-        RecommendationService.onUpdate = {
-            run = RecommendationService.isRunning
-            sc = RecommendationService.successCount
-            ta = RecommendationService.totalAttempts
-            fc = RecommendationService.failedCount
-            ic = RecommendationService.installedCount
-            ll = RecommendationService.lastLog
-            pc = ContactManager.getPendingCount(ctx)
-            si = ContactManager.getInstalledCount(ctx)
-            lt = ContactManager.getLifetimeTotal(ctx)
-            ls = ContactManager.getLifetimeSuccess(ctx)
-            gc = ContactManager.getGeneratedCount(ctx)
-        }
+        RecommendationService.onUpdate = { refreshState() }
         onDispose { RecommendationService.onUpdate = null }
     }
 
     LaunchedEffect(Unit) {
         while (true) {
             delay(2000)
-            if (!run) {
-                run = RecommendationService.isRunning
-                pc = ContactManager.getPendingCount(ctx)
-                si = ContactManager.getInstalledCount(ctx)
-                lt = ContactManager.getLifetimeTotal(ctx)
-                ls = ContactManager.getLifetimeSuccess(ctx)
-                gc = ContactManager.getGeneratedCount(ctx)
-            }
+            refreshState()
         }
     }
 
     Column(
-        Modifier
+        modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column {
-                Text("One Nation", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = C.Text1)
-                Text("Safaricom App Recommendations", fontSize = 13.sp, color = C.Text2)
-            }
-            if (run) {
-                Box(
-                    Modifier
-                        .clip(RoundedCornerShape(50))
-                        .background(C.GreenDim)
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            Modifier
-                                .size(8.dp)
-                                .clip(RoundedCornerShape(50))
-                                .background(C.Green),
-                        )
-                        Spacer(Modifier.width(6.dp))
-                        Text("LIVE", color = C.Green, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-        }
-
-        Spacer(Modifier.height(20.dp))
-        Text(
-            "CURRENT SESSION",
-            color = C.Text3,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.SemiBold,
-            letterSpacing = 1.5.sp,
+        ScreenTitle(
+            title = "One Nation",
+            subtitle = "Professional automation dashboard for recommendations",
         )
-        Spacer(Modifier.height(10.dp))
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            StatCard("Attempts", "$ta", C.Blue, Modifier.weight(1f))
-            StatCard("Success", "$sc", C.Green, Modifier.weight(1f))
-        }
-        Spacer(Modifier.height(10.dp))
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            StatCard("Failed", "$fc", C.Red, Modifier.weight(1f))
-            StatCard("Installed", "$ic", C.Orange, Modifier.weight(1f))
-        }
 
-        Spacer(Modifier.height(20.dp))
-        Text(
-            "LIFETIME STATS",
-            color = C.Text3,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.SemiBold,
-            letterSpacing = 1.5.sp,
+        HeroStatusCard(
+            isRunning = run,
+            simLabel = SimSelection.getSelectedSimLabel(ctx),
+            dailyTarget = dailyTarget,
+            lastLog = ll,
         )
-        Spacer(Modifier.height(10.dp))
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            StatCard("Total", "$lt", C.Purple, Modifier.weight(1f))
-            StatCard("OK", "$ls", C.Cyan, Modifier.weight(1f))
-        }
-        Spacer(Modifier.height(10.dp))
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            StatCard("Generated", "$gc", C.Blue, Modifier.weight(1f))
-            StatCard("Pending", "$pc", C.Orange, Modifier.weight(1f))
-        }
-        Spacer(Modifier.height(20.dp))
 
-        Button(
-            onClick = {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            PrimaryActionButton(
+                modifier = Modifier.weight(1f),
+                label = if (run) "Stop Automation" else "Start Automation",
+                icon = if (run) Icons.Filled.Stop else Icons.Filled.PlayArrow,
+                color = if (run) C.Red else C.Green,
+            ) {
                 if (run) {
                     ctx.startService(
                         Intent(ctx, RecommendationService::class.java).apply {
@@ -358,83 +296,69 @@ fun Dash() {
                     startRecommendationService(ctx)
                 }
                 vibrate(ctx)
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(58.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = if (run) C.Red else C.Green),
-            shape = RoundedCornerShape(16.dp),
-        ) {
-            Icon(
-                imageVector = if (run) Icons.Filled.Stop else Icons.Filled.PlayArrow,
-                contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier.size(24.dp),
-            )
-            Spacer(Modifier.width(10.dp))
-            Text(
-                text = if (run) "STOP" else "START",
-                fontWeight = FontWeight.Bold,
-                fontSize = 15.sp,
-                color = Color.White,
-            )
-        }
+                refreshState()
+            }
 
-        Spacer(Modifier.height(12.dp))
-        OutlinedButton(
-            onClick = { importContacts(ctx) },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(48.dp),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = C.Blue),
-            shape = RoundedCornerShape(12.dp),
-        ) {
-            Icon(Icons.Outlined.Contacts, null, Modifier.size(20.dp))
-            Spacer(Modifier.width(8.dp))
-            Text("Import Phone Contacts", fontSize = 14.sp)
-        }
-
-        if (run) {
-            Spacer(Modifier.height(12.dp))
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(C.GreenDim)
-                    .padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
+            SecondaryActionButton(
+                modifier = Modifier.weight(1f),
+                label = "Import Contacts",
+                icon = Icons.Outlined.Contacts,
+                color = C.Blue,
             ) {
-                Box(
-                    Modifier
-                        .size(8.dp)
-                        .clip(RoundedCornerShape(50))
-                        .background(C.Green),
-                )
-                Spacer(Modifier.width(10.dp))
-                Text(
-                    "Running on ${SimSelection.getSelectedSimLabel(ctx)} - every 8 seconds",
-                    color = C.Green,
-                    fontSize = 12.sp,
-                )
+                importContacts(ctx)
+                refreshState()
             }
         }
 
-        if (ll.isNotBlank()) {
-            Spacer(Modifier.height(12.dp))
-            Card(
-                colors = CardDefaults.cardColors(containerColor = C.Card),
-                shape = RoundedCornerShape(12.dp),
+        SectionTitle("Session Overview", "Current run performance and outcomes")
+        MetricsGrid(
+            items = listOf(
+                MetricItem("Attempts", "$ta", C.Blue),
+                MetricItem("Success", "$sc", C.Green),
+                MetricItem("Failed", "$fc", C.Red),
+                MetricItem("Installed", "$ic", C.Orange),
+            ),
+        )
+
+        SectionTitle("Lifetime Overview", "All-time totals stored on this device")
+        MetricsGrid(
+            items = listOf(
+                MetricItem("Total Saved", "$lt", C.Purple),
+                MetricItem("Confirmed", "$ls", C.Cyan),
+                MetricItem("Generated", "$gc", C.Blue),
+                MetricItem("Pending", "$pc", C.Orange),
+                MetricItem("Installed", "$si", C.Green),
+                MetricItem("Daily Target", "$dailyTarget", C.Text1),
+            ),
+        )
+
+        SectionCard {
+            Text("Background Operation", color = C.Text1, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "When automation is started it keeps running in the background with a foreground notification, and the service resumes after reboot if it was active.",
+                color = C.Text2,
+                fontSize = 13.sp,
+            )
+        }
+    }
+}
+
+data class MetricItem(val label: String, val value: String, val color: Color)
+
+@Composable
+fun MetricsGrid(items: List<MetricItem>) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        items.chunked(2).forEach { rowItems ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                Row(Modifier.padding(12.dp)) {
-                    Box(
-                        Modifier
-                            .width(3.dp)
-                            .height(40.dp)
-                            .clip(RoundedCornerShape(2.dp))
-                            .background(C.Green),
-                    )
-                    Spacer(Modifier.width(10.dp))
-                    Text(ll, fontSize = 12.sp, color = C.Text2)
+                rowItems.forEach { item ->
+                    MetricCard(item = item, modifier = Modifier.weight(1f))
+                }
+                if (rowItems.size == 1) {
+                    Spacer(Modifier.weight(1f))
                 }
             }
         }
@@ -442,20 +366,162 @@ fun Dash() {
 }
 
 @Composable
-fun StatCard(label: String, value: String, color: Color, modifier: Modifier = Modifier) {
+fun MetricCard(item: MetricItem, modifier: Modifier = Modifier) {
     Card(
         modifier = modifier,
         colors = CardDefaults.cardColors(containerColor = C.Card),
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(18.dp),
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(item.label, fontSize = 12.sp, color = C.Text3)
+            Spacer(Modifier.height(8.dp))
+            Text(item.value, fontSize = 28.sp, fontWeight = FontWeight.Bold, color = item.color)
+        }
+    }
+}
+
+@Composable
+fun HeroStatusCard(
+    isRunning: Boolean,
+    simLabel: String,
+    dailyTarget: Int,
+    lastLog: String,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = C.CardAlt),
+        shape = RoundedCornerShape(22.dp),
     ) {
         Column(
-            modifier = Modifier.padding(14.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(C.Blue.copy(alpha = 0.18f), C.CardAlt),
+                    ),
+                )
+                .padding(18.dp),
         ) {
-            Text(value, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = color)
-            Spacer(Modifier.height(4.dp))
-            Text(label, fontSize = 11.sp, color = C.Text3, letterSpacing = 1.sp)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                StatusPill(
+                    label = if (isRunning) "Running" else "Stopped",
+                    color = if (isRunning) C.Green else C.Red,
+                )
+                StatusPill(label = simLabel, color = C.Blue)
+            }
+            Spacer(Modifier.height(16.dp))
+            Text(
+                text = if (isRunning) "Automation is active in the background" else "Automation is currently paused",
+                color = C.Text1,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = "Daily target is set to $dailyTarget and requests are processed every 8 seconds.",
+                color = C.Text2,
+                fontSize = 13.sp,
+            )
+            if (lastLog.isNotBlank()) {
+                Spacer(Modifier.height(14.dp))
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.05f)),
+                    shape = RoundedCornerShape(16.dp),
+                ) {
+                    Column(Modifier.padding(14.dp)) {
+                        Text("Latest activity", color = C.Text3, fontSize = 11.sp, letterSpacing = 1.sp)
+                        Spacer(Modifier.height(4.dp))
+                        Text(lastLog, color = C.Text1, fontSize = 13.sp)
+                    }
+                }
+            }
         }
+    }
+}
+
+@Composable
+fun StatusPill(label: String, color: Color) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(color.copy(alpha = 0.16f))
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+    ) {
+        Text(label, color = color, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+    }
+}
+
+@Composable
+fun ScreenTitle(title: String, subtitle: String) {
+    Column {
+        Text(title, fontSize = 28.sp, fontWeight = FontWeight.Bold, color = C.Text1)
+        Spacer(Modifier.height(4.dp))
+        Text(subtitle, fontSize = 13.sp, color = C.Text2)
+    }
+}
+
+@Composable
+fun SectionTitle(title: String, subtitle: String) {
+    Column {
+        Text(title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = C.Text1)
+        Spacer(Modifier.height(2.dp))
+        Text(subtitle, fontSize = 12.sp, color = C.Text3)
+    }
+}
+
+@Composable
+fun SectionCard(content: @Composable () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = C.Card),
+        shape = RoundedCornerShape(18.dp),
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            content()
+        }
+    }
+}
+
+@Composable
+fun PrimaryActionButton(
+    modifier: Modifier = Modifier,
+    label: String,
+    icon: ImageVector,
+    color: Color,
+    onClick: () -> Unit,
+) {
+    Button(
+        onClick = onClick,
+        modifier = modifier.height(56.dp),
+        shape = RoundedCornerShape(16.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = color),
+    ) {
+        Icon(icon, contentDescription = null, tint = Color.White)
+        Spacer(Modifier.width(8.dp))
+        Text(label, color = Color.White, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+fun SecondaryActionButton(
+    modifier: Modifier = Modifier,
+    label: String,
+    icon: ImageVector,
+    color: Color,
+    onClick: () -> Unit,
+) {
+    OutlinedButton(
+        onClick = onClick,
+        modifier = modifier.height(56.dp),
+        shape = RoundedCornerShape(16.dp),
+        colors = ButtonDefaults.outlinedButtonColors(contentColor = color),
+    ) {
+        Icon(icon, contentDescription = null)
+        Spacer(Modifier.width(8.dp))
+        Text(label, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -472,76 +538,48 @@ fun Saved() {
         }
     }
 
-    Column(Modifier.fillMaxSize().padding(16.dp)) {
-        Text("Saved Numbers", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = C.Text1)
-        Text("${nums.size} pending", fontSize = 13.sp, color = C.Text2)
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+    ) {
+        ScreenTitle("Saved Numbers", "${nums.size} pending numbers waiting for follow-up")
         Spacer(Modifier.height(16.dp))
 
         if (nums.isEmpty()) {
-            Emp(Icons.Outlined.Group, "No saved", "Appear here for 23h retry")
+            Emp(Icons.Outlined.Group, "No saved numbers", "Numbers waiting for retry will appear here.")
         } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(nums, key = { it.phone }) { n ->
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                items(nums, key = { it.phone }) { number ->
                     val sourceColor = when {
-                        n.source.contains("MPESA") -> C.Green
-                        n.source.contains("CONTACTS") -> C.Orange
+                        number.source.contains("MPESA") -> C.Green
+                        number.source.contains("CONTACTS") -> C.Orange
                         else -> C.Blue
                     }
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = C.Card),
-                        shape = RoundedCornerShape(12.dp),
-                    ) {
+                    SectionCard {
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(14.dp),
+                            modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween,
                         ) {
-                            Column(Modifier.weight(1f)) {
-                                Text(
-                                    n.phone,
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = C.Text1,
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(number.phone, color = C.Text1, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+                                Spacer(Modifier.height(6.dp))
+                                StatusPill(number.source.replace("_", " "), sourceColor)
+                                Spacer(Modifier.height(8.dp))
+                                DetailLine("Added", "${number.dateAdded} ${number.timeAdded}")
+                                DetailLine(
+                                    "Last attempt",
+                                    number.lastAttempted.ifBlank { "Not attempted yet" },
                                 )
-                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Text(
-                                        "Added: ${n.dateAdded} ${n.timeAdded}",
-                                        fontSize = 11.sp,
-                                        color = C.Text3,
-                                    )
-                                    Box(
-                                        Modifier
-                                            .clip(RoundedCornerShape(50))
-                                            .background(sourceColor.copy(alpha = 0.15f))
-                                            .padding(horizontal = 8.dp, vertical = 2.dp),
-                                    ) {
-                                        Text(
-                                            n.source.replace("_", " "),
-                                            fontSize = 10.sp,
-                                            color = sourceColor,
-                                        )
-                                    }
-                                }
-                                if (n.lastAttempted.isNotBlank()) {
-                                    Text("Last: ${n.lastAttempted}", fontSize = 10.sp, color = C.Text3)
-                                }
-                                if (n.nextRetryTime.isNotBlank()) {
-                                    Text("Next: ${n.nextRetryTime}", fontSize = 10.sp, color = C.Orange)
-                                }
-                                if (n.retryCount > 0) {
-                                    Text("Retries: ${n.retryCount}", fontSize = 10.sp, color = C.Text3)
-                                }
+                                DetailLine(
+                                    "Next retry",
+                                    number.nextRetryTime.ifBlank { "Waiting for first run" },
+                                )
+                                DetailLine("Retry count", "${number.retryCount}")
                             }
-                            IconButton(onClick = { del = n.phone }) {
-                                Icon(
-                                    Icons.Outlined.Delete,
-                                    "Remove",
-                                    tint = C.Text3,
-                                    modifier = Modifier.size(20.dp),
-                                )
+                            IconButton(onClick = { del = number.phone }) {
+                                Icon(Icons.Outlined.Delete, "Remove saved number", tint = C.Text3)
                             }
                         }
                     }
@@ -554,8 +592,8 @@ fun Saved() {
         AlertDialog(
             onDismissRequest = { del = null },
             containerColor = C.Card,
-            title = { Text("Remove?", color = C.Text1) },
-            text = { Text("Remove $phone?", color = C.Text2) },
+            title = { Text("Remove saved number?", color = C.Text1) },
+            text = { Text(phone, color = C.Text2) },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -589,60 +627,53 @@ fun Installed() {
         }
     }
 
-    Column(Modifier.fillMaxSize().padding(16.dp)) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+    ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column {
-                Text("Installed", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = C.Text1)
-                Text("${nums.size} confirmed", fontSize = 13.sp, color = C.Green)
-            }
+            ScreenTitle("Installed", "${nums.size} confirmed installations")
             if (nums.isNotEmpty()) {
                 TextButton(onClick = { clr = true }) {
-                    Text("Clear All", color = C.Red, fontSize = 13.sp)
+                    Text("Clear All", color = C.Red)
                 }
             }
         }
         Spacer(Modifier.height(16.dp))
 
         if (nums.isEmpty()) {
-            Emp(Icons.Outlined.CheckCircle, "No installs", "Confirmed installs appear here")
+            Emp(Icons.Outlined.CheckCircle, "No installed numbers", "Confirmed installs will be listed here.")
         } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(nums, key = { it.phone }) { n ->
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                items(nums, key = { it.phone }) { number ->
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.cardColors(containerColor = C.GreenDim),
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(18.dp),
                     ) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(14.dp),
+                                .padding(16.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Icon(
                                 Icons.Filled.CheckCircle,
-                                null,
+                                contentDescription = null,
                                 tint = C.Green,
                                 modifier = Modifier.size(24.dp),
                             )
                             Spacer(Modifier.width(12.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text(
-                                    n.phone,
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = C.Text1,
-                                )
-                                Text(
-                                    "Added: ${n.dateAdded} ${n.timeAdded}",
-                                    fontSize = 11.sp,
-                                    color = C.Text3,
-                                )
-                                Text(n.source.replace("_", " "), fontSize = 11.sp, color = C.Green)
+                            Column {
+                                Text(number.phone, color = C.Text1, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+                                Spacer(Modifier.height(4.dp))
+                                Text("Added ${number.dateAdded} ${number.timeAdded}", color = C.Text2, fontSize = 12.sp)
+                                Text(number.source.replace("_", " "), color = C.Green, fontSize = 12.sp)
                             }
                         }
                     }
@@ -655,8 +686,8 @@ fun Installed() {
         AlertDialog(
             onDismissRequest = { clr = false },
             containerColor = C.Card,
-            title = { Text("Clear All?", color = C.Text1) },
-            text = { Text("Remove ${nums.size} installed?", color = C.Text2) },
+            title = { Text("Clear installed list?", color = C.Text1) },
+            text = { Text("This will remove ${nums.size} installed records.", color = C.Text2) },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -665,7 +696,7 @@ fun Installed() {
                         clr = false
                     },
                 ) {
-                    Text("Clear All", color = C.Red)
+                    Text("Clear", color = C.Red)
                 }
             },
             dismissButton = {
@@ -691,22 +722,25 @@ fun Logs() {
         }
     }
 
-    val filteredLogs = if (filter == "ALL") {
-        logs
-    } else {
-        logs.filter { it.contains(filter) }
+    val filteredLogs = when (filter) {
+        "ALL" -> logs
+        "USSD" -> logs.filter { it.contains("USSD RESPONSE") || it.contains("USSD ERROR") }
+        else -> logs.filter { it.contains(filter) }
     }
 
-    Column(Modifier.fillMaxSize().padding(16.dp)) {
-        Text("Activity Logs", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = C.Text1)
-        Text("${filteredLogs.size} entries", fontSize = 13.sp, color = C.Text2)
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+    ) {
+        ScreenTitle("Activity Logs", "${filteredLogs.size} log entries")
         Spacer(Modifier.height(12.dp))
 
         Row(
             modifier = Modifier.horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            listOf("ALL", "SUCCESS", "INSTALLED", "FAILED", "ERROR").forEach { option ->
+            listOf("ALL", "SUCCESS", "INSTALLED", "FAILED", "ERROR", "USSD").forEach { option ->
                 FilterChip(
                     selected = filter == option,
                     onClick = { filter = option },
@@ -714,16 +748,18 @@ fun Logs() {
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = when (option) {
                             "SUCCESS" -> C.GreenDim
-                            "INSTALLED" -> C.Orange.copy(alpha = 0.15f)
-                            "FAILED" -> C.Blue.copy(alpha = 0.15f)
-                            "ERROR" -> C.Red.copy(alpha = 0.15f)
-                            else -> Color.White.copy(alpha = 0.05f)
+                            "INSTALLED" -> C.OrangeDim
+                            "FAILED" -> C.BlueDim
+                            "ERROR" -> C.RedDim
+                            "USSD" -> C.Purple.copy(alpha = 0.16f)
+                            else -> Color.White.copy(alpha = 0.06f)
                         },
                         selectedLabelColor = when (option) {
                             "SUCCESS" -> C.Green
                             "INSTALLED" -> C.Orange
                             "FAILED" -> C.Blue
                             "ERROR" -> C.Red
+                            "USSD" -> C.Purple
                             else -> C.Text2
                         },
                     ),
@@ -733,35 +769,29 @@ fun Logs() {
 
         Spacer(Modifier.height(12.dp))
         if (filteredLogs.isEmpty()) {
-            Emp(Icons.Outlined.ListAlt, "No logs", "Activity will appear here")
+            Emp(Icons.Outlined.ListAlt, "No logs yet", "New automation activity will appear here.")
         } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(filteredLogs) { log ->
                     val logColor = when {
                         log.contains("SUCCESS") -> C.Green
                         log.contains("INSTALLED") -> C.Orange
                         log.contains("ERROR") -> C.Red
                         log.contains("FAILED") -> C.Blue
+                        log.contains("USSD") -> C.Purple
                         else -> C.Text2
                     }
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = C.Card),
-                        shape = RoundedCornerShape(8.dp),
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(10.dp),
-                            verticalAlignment = Alignment.Top,
-                        ) {
+                    SectionCard {
+                        Row(verticalAlignment = Alignment.Top) {
                             Box(
-                                Modifier
-                                    .padding(top = 4.dp)
-                                    .size(6.dp)
+                                modifier = Modifier
+                                    .padding(top = 6.dp)
+                                    .size(8.dp)
                                     .clip(RoundedCornerShape(50))
                                     .background(logColor),
                             )
-                            Spacer(Modifier.width(8.dp))
-                            Text(log, fontSize = 11.sp, color = logColor)
+                            Spacer(Modifier.width(10.dp))
+                            Text(log, color = logColor, fontSize = 12.sp)
                         }
                     }
                 }
@@ -774,254 +804,210 @@ fun Logs() {
 @Composable
 fun Settings() {
     val ctx = LocalContext.current
-    val prefs = ctx.getSharedPreferences("onenation_settings", Context.MODE_PRIVATE)
-    var dt by remember { mutableStateOf(prefs.getInt("daily_target", 100).toString()) }
-    var ad by remember { mutableStateOf(ContactManager.getAutoDeleteSetting(ctx)) }
+    val prefs = ctx.getSharedPreferences(SETTINGS_PREFS, Context.MODE_PRIVATE)
+    var dailyTargetInput by remember {
+        mutableStateOf(prefs.getInt(KEY_DAILY_TARGET, DEFAULT_DAILY_TARGET).toString())
+    }
+    var autoDeleteSelection by remember { mutableStateOf(ContactManager.getAutoDeleteSetting(ctx)) }
     var clr by remember { mutableStateOf(false) }
     var simOptions by remember { mutableStateOf(SimSelection.getAvailableSimOptions(ctx)) }
     var simId by remember { mutableIntStateOf(SimSelection.getStoredSubscriptionId(ctx)) }
 
     Column(
-        Modifier
+        modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Text("Settings", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = C.Text1)
-        Text("Configure app", fontSize = 13.sp, color = C.Text2)
-        Spacer(Modifier.height(24.dp))
+        ScreenTitle("Settings", "Well-labelled controls with save buttons for each section")
 
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = C.Card),
-            shape = RoundedCornerShape(14.dp),
-        ) {
-            Column(Modifier.padding(16.dp)) {
-                Text(
-                    "DAILY TARGET",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = C.Text3,
-                    letterSpacing = 1.sp,
-                )
-                Spacer(Modifier.height(10.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Column {
-                        Text("Max per day", color = C.Text1, fontSize = 14.sp)
-                        Text("Stops when reached", color = C.Text3, fontSize = 11.sp)
+        SectionCard {
+            Text("Daily Target", color = C.Text1, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+            Spacer(Modifier.height(4.dp))
+            Text("Default is 7000 and automation stops when this total is reached for the day.", color = C.Text2, fontSize = 13.sp)
+            Spacer(Modifier.height(14.dp))
+            OutlinedTextField(
+                value = dailyTargetInput,
+                onValueChange = {
+                    if (it.all(Char::isDigit)) {
+                        dailyTargetInput = it
                     }
-                    OutlinedTextField(
-                        value = dt,
-                        onValueChange = {
-                            if (it.all { ch -> ch.isDigit() }) {
-                                dt = it
-                                prefs.edit().putInt("daily_target", it.toIntOrNull() ?: 100).apply()
-                            }
-                        },
-                        modifier = Modifier.width(80.dp),
-                        textStyle = TextStyle(
-                            color = C.Text1,
-                            textAlign = TextAlign.Center,
-                            fontSize = 16.sp,
-                        ),
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        shape = RoundedCornerShape(10.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = C.Green,
-                            unfocusedBorderColor = Color(0xFF1E293B),
-                        ),
-                    )
-                }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Daily target", color = C.Text3) },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                textStyle = TextStyle(color = C.Text1, fontSize = 16.sp),
+                shape = RoundedCornerShape(14.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = C.Green,
+                    unfocusedBorderColor = C.Border,
+                    focusedTextColor = C.Text1,
+                    unfocusedTextColor = C.Text1,
+                ),
+            )
+            Spacer(Modifier.height(12.dp))
+            Button(
+                onClick = {
+                    val value = dailyTargetInput.toIntOrNull() ?: DEFAULT_DAILY_TARGET
+                    prefs.edit().putInt(KEY_DAILY_TARGET, value).apply()
+                    dailyTargetInput = value.toString()
+                    Toast.makeText(ctx, "Daily target saved", Toast.LENGTH_SHORT).show()
+                },
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = C.Green),
+            ) {
+                Text("Save Daily Target", color = Color.White)
             }
         }
 
-        Spacer(Modifier.height(14.dp))
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = C.Card),
-            shape = RoundedCornerShape(14.dp),
-        ) {
-            Column(Modifier.padding(16.dp)) {
-                Text(
-                    "AUTOMATION SIM",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = C.Text3,
-                    letterSpacing = 1.sp,
+        SectionCard {
+            Text("Automation SIM", color = C.Text1, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+            Spacer(Modifier.height(4.dp))
+            Text("Choose which SIM sends the USSD request.", color = C.Text2, fontSize = 13.sp)
+            Spacer(Modifier.height(8.dp))
+            DetailLine("Current selection", SimSelection.getSelectedSimLabel(ctx))
+            Spacer(Modifier.height(12.dp))
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                FilterChip(
+                    selected = simId == SimSelection.AUTO_SUBSCRIPTION_ID,
+                    onClick = { simId = SimSelection.AUTO_SUBSCRIPTION_ID },
+                    label = { Text("Auto", fontSize = 12.sp) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = C.GreenDim,
+                        selectedLabelColor = C.Green,
+                    ),
                 )
-                Spacer(Modifier.height(10.dp))
-                Text(
-                    "Choose which SIM slot sends the automation USSD request",
-                    color = C.Text1,
-                    fontSize = 14.sp,
-                )
-                Spacer(Modifier.height(4.dp))
-                Text("Current: ${SimSelection.getSelectedSimLabel(ctx)}", color = C.Text3, fontSize = 11.sp)
-                Spacer(Modifier.height(12.dp))
-                Row(
-                    modifier = Modifier.horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
+                simOptions.forEach { option ->
                     FilterChip(
-                        selected = simId == SimSelection.AUTO_SUBSCRIPTION_ID,
-                        onClick = {
-                            simId = SimSelection.AUTO_SUBSCRIPTION_ID
-                            SimSelection.saveSelectedSubscriptionId(ctx, simId)
-                        },
-                        label = { Text("Auto", fontSize = 12.sp) },
+                        selected = simId == option.subscriptionId,
+                        onClick = { simId = option.subscriptionId },
+                        label = { Text(option.label, fontSize = 12.sp) },
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = C.GreenDim,
                             selectedLabelColor = C.Green,
                         ),
                     )
-                    simOptions.forEach { option ->
-                        FilterChip(
-                            selected = simId == option.subscriptionId,
-                            onClick = {
-                                simId = option.subscriptionId
-                                SimSelection.saveSelectedSubscriptionId(ctx, simId)
-                            },
-                            label = { Text(option.label, fontSize = 12.sp) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = C.GreenDim,
-                                selectedLabelColor = C.Green,
-                            ),
-                        )
-                    }
                 }
-                if (simOptions.isEmpty()) {
-                    Spacer(Modifier.height(10.dp))
-                    Text(
-                        "No active SIM detected. Auto uses the phone default telephony line.",
-                        color = C.Text3,
-                        fontSize = 11.sp,
+            }
+            if (simOptions.isEmpty()) {
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    "No active SIM detected. Auto mode uses the phone default line.",
+                    color = C.Text3,
+                    fontSize = 12.sp,
+                )
+            }
+            Spacer(Modifier.height(12.dp))
+            Button(
+                onClick = {
+                    SimSelection.saveSelectedSubscriptionId(ctx, simId)
+                    simOptions = SimSelection.getAvailableSimOptions(ctx)
+                    Toast.makeText(ctx, "SIM selection saved", Toast.LENGTH_SHORT).show()
+                },
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = C.Green),
+            ) {
+                Text("Save SIM Choice", color = Color.White)
+            }
+        }
+
+        SectionCard {
+            Text("Auto Delete", color = C.Text1, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+            Spacer(Modifier.height(4.dp))
+            Text("Choose when installed records should be cleaned up automatically.", color = C.Text2, fontSize = 13.sp)
+            Spacer(Modifier.height(12.dp))
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                listOf("never", "daily", "weekly", "monthly").forEach { option ->
+                    FilterChip(
+                        selected = autoDeleteSelection == option,
+                        onClick = { autoDeleteSelection = option },
+                        label = { Text(option.replaceFirstChar { it.uppercase() }, fontSize = 12.sp) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = C.GreenDim,
+                            selectedLabelColor = C.Green,
+                        ),
                     )
                 }
             }
+            Spacer(Modifier.height(12.dp))
+            Button(
+                onClick = {
+                    ContactManager.setAutoDeleteSetting(ctx, autoDeleteSelection)
+                    Toast.makeText(ctx, "Auto delete setting saved", Toast.LENGTH_SHORT).show()
+                },
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = C.Green),
+            ) {
+                Text("Save Auto Delete", color = Color.White)
+            }
         }
 
-        Spacer(Modifier.height(14.dp))
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = C.Card),
-            shape = RoundedCornerShape(14.dp),
-        ) {
-            Column(Modifier.padding(16.dp)) {
-                Text(
-                    "AUTO-DELETE",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = C.Text3,
-                    letterSpacing = 1.sp,
-                )
-                Spacer(Modifier.height(10.dp))
-                Row(
-                    modifier = Modifier.horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    listOf("never", "daily", "weekly", "monthly").forEach { option ->
-                        FilterChip(
-                            selected = ad == option,
-                            onClick = {
-                                ad = option
-                                ContactManager.setAutoDeleteSetting(ctx, option)
-                            },
-                            label = {
-                                Text(
-                                    option.replaceFirstChar { it.uppercase() },
-                                    fontSize = 12.sp,
-                                )
-                            },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = C.GreenDim,
-                                selectedLabelColor = C.Green,
-                            ),
-                        )
-                    }
+        SectionCard {
+            Text("Data Management", color = C.Text1, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+            Spacer(Modifier.height(10.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .clickable { importContacts(ctx) }
+                    .background(C.BlueDim)
+                    .padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Outlined.Contacts, contentDescription = null, tint = C.Blue)
+                Spacer(Modifier.width(10.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Import Phone Contacts", color = C.Text1, fontWeight = FontWeight.SemiBold)
+                    Text("Add valid numbers from saved contacts", color = C.Text2, fontSize = 12.sp)
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .clickable { clr = true }
+                    .background(C.RedDim)
+                    .padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Outlined.DeleteForever, contentDescription = null, tint = C.Red)
+                Spacer(Modifier.width(10.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Clear All Data", color = C.Text1, fontWeight = FontWeight.SemiBold)
+                    Text("Remove stored numbers, logs and settings", color = C.Text2, fontSize = 12.sp)
                 }
             }
         }
 
-        Spacer(Modifier.height(14.dp))
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = C.Card),
-            shape = RoundedCornerShape(14.dp),
-        ) {
-            Column(Modifier.padding(16.dp)) {
-                Text(
-                    "DATA",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = C.Text3,
-                    letterSpacing = 1.sp,
-                )
-                Spacer(Modifier.height(10.dp))
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
-                        .clickable { importContacts(ctx) }
-                        .padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(Icons.Outlined.Contacts, null, tint = C.Blue, modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(12.dp))
-                    Text("Import Contacts", color = C.Text1, fontSize = 14.sp, modifier = Modifier.weight(1f))
-                }
-                Divider(color = Color(0xFF1E293B))
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
-                        .clickable { clr = true }
-                        .padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(Icons.Outlined.DeleteForever, null, tint = C.Red, modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(12.dp))
-                    Text("Clear All Data", color = C.Text1, fontSize = 14.sp, modifier = Modifier.weight(1f))
-                }
-            }
+        SectionCard {
+            Text("Stored Totals", color = C.Text1, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+            Spacer(Modifier.height(10.dp))
+            StatRow("Total saved", "${ContactManager.getLifetimeTotal(ctx)}")
+            Divider(color = C.Border, modifier = Modifier.padding(vertical = 8.dp))
+            StatRow("Successful installs", "${ContactManager.getLifetimeSuccess(ctx)}")
+            Divider(color = C.Border, modifier = Modifier.padding(vertical = 8.dp))
+            StatRow("Generated numbers", "${ContactManager.getGeneratedCount(ctx)}")
+            Divider(color = C.Border, modifier = Modifier.padding(vertical = 8.dp))
+            StatRow("Pending numbers", "${ContactManager.getPendingCount(ctx)}")
+            Divider(color = C.Border, modifier = Modifier.padding(vertical = 8.dp))
+            StatRow("Installed numbers", "${ContactManager.getInstalledCount(ctx)}")
         }
 
-        Spacer(Modifier.height(14.dp))
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = C.Card),
-            shape = RoundedCornerShape(14.dp),
-        ) {
-            Column(Modifier.padding(16.dp)) {
-                Text(
-                    "STATS",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = C.Text3,
-                    letterSpacing = 1.sp,
-                )
-                Spacer(Modifier.height(10.dp))
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    SR("Total", "${ContactManager.getLifetimeTotal(ctx)}")
-                    SR("Success", "${ContactManager.getLifetimeSuccess(ctx)}")
-                    SR("Generated", "${ContactManager.getGeneratedCount(ctx)}")
-                    SR("Pending", "${ContactManager.getPendingCount(ctx)}")
-                    SR("Installed", "${ContactManager.getInstalledCount(ctx)}")
-                }
-            }
-        }
-
-        Spacer(Modifier.height(24.dp))
         Text(
-            "One Nation v1.0.8",
+            text = "One Nation v1.0.8",
             modifier = Modifier.fillMaxWidth(),
             textAlign = TextAlign.Center,
-            fontSize = 12.sp,
             color = C.Text3,
+            fontSize = 12.sp,
         )
     }
 
@@ -1029,20 +1015,20 @@ fun Settings() {
         AlertDialog(
             onDismissRequest = { clr = false },
             containerColor = C.Card,
-            title = { Text("Clear All?", color = C.Text1) },
-            text = { Text("Delete everything?", color = C.Text2) },
+            title = { Text("Clear all stored data?", color = C.Text1) },
+            text = { Text("This clears numbers, logs and app settings.", color = C.Text2) },
             confirmButton = {
                 TextButton(
                     onClick = {
-                        ctx.getSharedPreferences("onenation_data", Context.MODE_PRIVATE).edit().clear().apply()
-                        ctx.getSharedPreferences("onenation_logs", Context.MODE_PRIVATE).edit().clear().apply()
-                        ctx.getSharedPreferences("onenation_settings", Context.MODE_PRIVATE).edit().clear().apply()
-                        dt = "100"
-                        ad = "never"
+                        ctx.getSharedPreferences(DATA_PREFS, Context.MODE_PRIVATE).edit().clear().apply()
+                        ctx.getSharedPreferences(LOGS_PREFS, Context.MODE_PRIVATE).edit().clear().apply()
+                        ctx.getSharedPreferences(SETTINGS_PREFS, Context.MODE_PRIVATE).edit().clear().apply()
+                        dailyTargetInput = DEFAULT_DAILY_TARGET.toString()
+                        autoDeleteSelection = "never"
                         simId = SimSelection.AUTO_SUBSCRIPTION_ID
                         simOptions = SimSelection.getAvailableSimOptions(ctx)
                         clr = false
-                        Toast.makeText(ctx, "Cleared", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(ctx, "All data cleared", Toast.LENGTH_SHORT).show()
                     },
                 ) {
                     Text("Clear", color = C.Red, fontWeight = FontWeight.Bold)
@@ -1058,13 +1044,21 @@ fun Settings() {
 }
 
 @Composable
-fun SR(label: String, value: String) {
+fun DetailLine(label: String, value: String) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text(label, color = C.Text3, fontSize = 12.sp)
+        Text(value, color = C.Text2, fontSize = 12.sp, textAlign = TextAlign.End)
+    }
+}
+
+@Composable
+fun StatRow(label: String, value: String) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Text(label, color = C.Text2, fontSize = 14.sp)
-        Text(value, color = C.Text1, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+        Text(value, color = C.Text1, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -1077,9 +1071,10 @@ fun Emp(icon: ImageVector, title: String, subtitle: String) {
         contentAlignment = Alignment.Center,
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(icon, null, tint = C.Text3, modifier = Modifier.size(48.dp))
+            Icon(icon, contentDescription = null, tint = C.Text3, modifier = Modifier.size(48.dp))
             Spacer(Modifier.height(12.dp))
-            Text(title, color = C.Text2, fontSize = 16.sp)
+            Text(title, color = C.Text2, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+            Spacer(Modifier.height(4.dp))
             Text(subtitle, color = C.Text3, fontSize = 12.sp, textAlign = TextAlign.Center)
         }
     }
@@ -1087,7 +1082,7 @@ fun Emp(icon: ImageVector, title: String, subtitle: String) {
 
 fun importContacts(ctx: Context) {
     if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) {
-        Toast.makeText(ctx, "Permission required", Toast.LENGTH_SHORT).show()
+        Toast.makeText(ctx, "Contact permission is required", Toast.LENGTH_SHORT).show()
         return
     }
 
@@ -1160,7 +1155,7 @@ fun startRecommendationService(ctx: Context) {
 }
 
 fun saveLog(ctx: Context, entry: String) {
-    val prefs = ctx.getSharedPreferences("onenation_logs", Context.MODE_PRIVATE)
+    val prefs = ctx.getSharedPreferences(LOGS_PREFS, Context.MODE_PRIVATE)
     val logs = JSONArray(prefs.getString("logs", "[]") ?: "[]")
     logs.put(entry)
     while (logs.length() > 500) {
@@ -1171,7 +1166,7 @@ fun saveLog(ctx: Context, entry: String) {
 
 fun loadLogs(ctx: Context): List<String> {
     val logs = JSONArray(
-        ctx.getSharedPreferences("onenation_logs", Context.MODE_PRIVATE)
+        ctx.getSharedPreferences(LOGS_PREFS, Context.MODE_PRIVATE)
             .getString("logs", "[]") ?: "[]",
     )
     val result = mutableListOf<String>()
