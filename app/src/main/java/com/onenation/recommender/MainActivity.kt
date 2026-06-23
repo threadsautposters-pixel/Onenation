@@ -299,7 +299,7 @@ fun Dash() {
                 Text("Command Center", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = C.Text1)
                 Text(
                     if (run) {
-                        "Automation is active and processing the queue."
+                        "Automation is active, processing the queue, and continues running in the background."
                     } else {
                         "Everything is ready. Start the engine when you want to begin."
                     },
@@ -508,15 +508,25 @@ fun Saved() {
         }
     }
 
-    Column(Modifier.fillMaxSize().padding(16.dp)) {
-        Text("Saved Numbers", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = C.Text1)
-        Text("${nums.size} pending", fontSize = 13.sp, color = C.Text2)
-        Spacer(Modifier.height(16.dp))
+    Column(
+        Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        ScreenHeader(
+            title = "Saved Numbers",
+            subtitle = "Pending recommendations waiting for retry or follow-up",
+            trailing = { StatusPill(text = "${nums.size} pending", color = C.Orange) },
+        )
 
         if (nums.isEmpty()) {
             Emp(Icons.Outlined.Group, "No saved", "Appear here for 23h retry")
         } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 items(nums, key = { it.phone }) { n ->
                     val sourceColor = when {
                         n.source.contains("MPESA") -> C.Green
@@ -625,15 +635,23 @@ fun Installed() {
         }
     }
 
-    Column(Modifier.fillMaxSize().padding(16.dp)) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
+            verticalAlignment = Alignment.Top,
         ) {
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 Text("Installed", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = C.Text1)
-                Text("${nums.size} confirmed", fontSize = 13.sp, color = C.Green)
+                Spacer(Modifier.height(4.dp))
+                Text("Confirmed installs recorded on this device", fontSize = 13.sp, color = C.Text2)
+                Spacer(Modifier.height(10.dp))
+                StatusPill(text = "${nums.size} confirmed", color = C.Green)
             }
             if (nums.isNotEmpty()) {
                 TextButton(onClick = { clr = true }) {
@@ -641,12 +659,14 @@ fun Installed() {
                 }
             }
         }
-        Spacer(Modifier.height(16.dp))
 
         if (nums.isEmpty()) {
             Emp(Icons.Outlined.CheckCircle, "No installs", "Confirmed installs appear here")
         } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 items(nums, key = { it.phone }) { n ->
                     Card(
                         modifier = Modifier.fillMaxWidth(),
@@ -733,10 +753,45 @@ fun Logs() {
         logs.filter { it.contains(filter) }
     }
 
-    Column(Modifier.fillMaxSize().padding(16.dp)) {
-        Text("Activity Logs", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = C.Text1)
-        Text("${filteredLogs.size} entries", fontSize = 13.sp, color = C.Text2)
-        Spacer(Modifier.height(12.dp))
+    Column(
+        Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        ScreenHeader(
+            title = "Activity Logs",
+            subtitle = "Structured results, labelled events, and final USSD responses for each run",
+        )
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = C.Card),
+            shape = RoundedCornerShape(24.dp),
+        ) {
+            Column(
+                modifier = Modifier.padding(18.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text("Log Overview", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = C.Text1)
+                Text(
+                    "Review saved outcomes and inspect the final response returned by each USSD request.",
+                    fontSize = 13.sp,
+                    color = C.Text2,
+                )
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    StatusPill(text = "${filteredLogs.size} visible", color = C.Blue)
+                    StatusPill(text = "${logs.size} total", color = C.Purple)
+                    StatusPill(
+                        text = if (RecommendationService.isRunning) "Background active" else "Background idle",
+                        color = if (RecommendationService.isRunning) C.Green else C.Orange,
+                    )
+                }
+            }
+        }
 
         Row(
             modifier = Modifier.horizontalScroll(rememberScrollState()),
@@ -767,39 +822,15 @@ fun Logs() {
             }
         }
 
-        Spacer(Modifier.height(12.dp))
         if (filteredLogs.isEmpty()) {
             Emp(Icons.Outlined.ListAlt, "No logs", "Activity will appear here")
         } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
                 items(filteredLogs) { log ->
-                    val logColor = when {
-                        log.contains("SUCCESS") -> C.Green
-                        log.contains("INSTALLED") -> C.Orange
-                        log.contains("ERROR") -> C.Red
-                        log.contains("FAILED") -> C.Blue
-                        else -> C.Text2
-                    }
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = C.Card),
-                        shape = RoundedCornerShape(8.dp),
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(10.dp),
-                            verticalAlignment = Alignment.Top,
-                        ) {
-                            Box(
-                                Modifier
-                                    .padding(top = 4.dp)
-                                    .size(6.dp)
-                                    .clip(RoundedCornerShape(50))
-                                    .background(logColor),
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text(log, fontSize = 11.sp, color = logColor)
-                        }
-                    }
+                    LogEntryCard(log)
                 }
             }
         }
@@ -1135,6 +1166,59 @@ fun SettingsSectionCard(
             Text(title, color = C.Text1, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
             Text(subtitle, color = C.Text2, fontSize = 12.sp, lineHeight = 18.sp)
             content()
+        }
+    }
+}
+
+@Composable
+fun LogEntryCard(log: String) {
+    val type = when {
+        log.contains("SUCCESS") -> "SUCCESS"
+        log.contains("INSTALLED") -> "INSTALLED"
+        log.contains("FAILED") -> "FAILED"
+        log.contains("ERROR") -> "ERROR"
+        else -> "INFO"
+    }
+    val color = when (type) {
+        "SUCCESS" -> C.Green
+        "INSTALLED" -> C.Orange
+        "FAILED" -> C.Blue
+        "ERROR" -> C.Red
+        else -> C.Text2
+    }
+    val responseMarker = "| FINAL RESPONSE:"
+    val hasResponse = log.contains(responseMarker)
+    val summary = if (hasResponse) log.substringBefore(responseMarker).trim() else log
+    val response = if (hasResponse) log.substringAfter(responseMarker).trim() else ""
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = C.Card),
+        shape = RoundedCornerShape(18.dp),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                StatusPill(text = type, color = color)
+                Text("Event Entry", color = C.Text3, fontSize = 11.sp)
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("Summary", color = C.Text3, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                Text(summary, fontSize = 13.sp, color = C.Text1, lineHeight = 18.sp)
+            }
+            if (response.isNotBlank()) {
+                Divider(color = Color(0xFF243041))
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Final USSD Response", color = C.Text3, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                    Text(response, fontSize = 12.sp, color = color, lineHeight = 18.sp)
+                }
+            }
         }
     }
 }
