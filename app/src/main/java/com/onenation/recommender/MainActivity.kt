@@ -105,7 +105,7 @@ private object C {
 }
 
 private const val DEFAULT_DAILY_TARGET = 1000
-private const val APP_VERSION = "1.0.8"
+private const val APP_VERSION = "1.0.9"
 
 class MainActivity : ComponentActivity() {
     private val requestPermissionsLauncher =
