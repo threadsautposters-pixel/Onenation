@@ -1013,7 +1013,7 @@ fun Settings() {
 
         Spacer(Modifier.height(24.dp))
         Text(
-            "One Nation v1.0.4",
+            "One Nation v1.0.5",
             modifier = Modifier.fillMaxWidth(),
             textAlign = TextAlign.Center,
             fontSize = 12.sp,

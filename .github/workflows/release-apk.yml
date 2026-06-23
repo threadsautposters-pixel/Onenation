@@ -54,7 +54,7 @@ jobs:
       - name: Detect signing configuration
         run: |
           if [ -z "$ANDROID_KEYSTORE_BASE64" ] || [ -z "$ANDROID_KEYSTORE_PASSWORD" ] || [ -z "$ANDROID_KEY_ALIAS" ] || [ -z "$ANDROID_KEY_PASSWORD" ]; then
-            echo "Android signing secrets are missing. Building an unsigned release APK."
+            echo "Android signing secrets are missing. Building a release APK signed with the default debug keystore."
             echo "HAS_ANDROID_SIGNING=false" >> "$GITHUB_ENV"
           else
             echo "Android signing secrets detected. Building a signed release APK."
