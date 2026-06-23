@@ -1,11 +1,57 @@
 package com.onenation.recommender
-import android.os.Bundle; import android.os.Handler; import android.os.Looper; import android.telephony.TelephonyManager; import java.lang.reflect.Method
+
+import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.telephony.TelephonyManager
+
 object SilentUssd {
-    private var m: Method? = null; private var l = false
-    fun execute(tm: TelephonyManager, code: String, ok: (String)->Unit, err: (String)->Unit): Boolean {
-        val c = if(code.endsWith("#")) code else "$code#"
-        if(!l) load(tm)
-        return if(m!=null){ try{ val h=Handler(Looper.getMainLooper()); val cb=object:android.os.ResultReceiver(h){ override fun onReceiveResult(r:Int,d:Bundle?){ if(r==0) ok(d?.getString("USSD_RESPONSE")?:"") else err(d?.getString("USSD_RESPONSE")?:"Error $r") } }; m?.invoke(tm,c,cb,h); true } catch(e:Exception){ err(e.message?:"Error"); false } } else false
+    sealed interface StartResult {
+        object Started : StartResult
+
+        data class NotStarted(val reason: String) : StartResult
     }
-    private fun load(tm: TelephonyManager) { l=true; try{ m=tm.javaClass.getMethod("sendUssdRequest",String::class.java,android.os.ResultReceiver::class.java,Handler::class.java) } catch(_:Exception){ m=null } }
+
+    fun execute(
+        tm: TelephonyManager,
+        code: String,
+        ok: (String) -> Unit,
+        err: (String) -> Unit,
+    ): StartResult {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            return StartResult.NotStarted("USSD requires Android 8.0+")
+        }
+
+        val c = if (code.endsWith("#")) code else "$code#"
+        val handler = Handler(Looper.getMainLooper())
+
+        return try {
+            tm.sendUssdRequest(
+                c,
+                object : TelephonyManager.UssdResponseCallback() {
+                    override fun onReceiveUssdResponse(
+                        telephonyManager: TelephonyManager,
+                        request: String,
+                        response: CharSequence,
+                    ) {
+                        ok(response.toString())
+                    }
+
+                    override fun onReceiveUssdResponseFailed(
+                        telephonyManager: TelephonyManager,
+                        request: String,
+                        failureCode: Int,
+                    ) {
+                        err("USSD failed: $failureCode")
+                    }
+                },
+                handler,
+            )
+            StartResult.Started
+        } catch (e: SecurityException) {
+            StartResult.NotStarted(e.message ?: "USSD blocked (missing permission or system restriction)")
+        } catch (t: Throwable) {
+            StartResult.NotStarted(t.message ?: t.javaClass.simpleName)
+        }
+    }
 }

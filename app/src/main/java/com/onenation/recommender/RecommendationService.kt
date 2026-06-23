@@ -141,7 +141,7 @@ class RecommendationService : Service() {
 
         try {
             val telephonyManager = SimSelection.getTelephonyManager(this)
-            val started = SilentUssd.execute(
+            val startResult = SilentUssd.execute(
                 tm = telephonyManager,
                 code = code,
                 ok = { response ->
@@ -199,10 +199,13 @@ class RecommendationService : Service() {
                 },
             )
 
-            if (!started) {
+            if (startResult is SilentUssd.StartResult.NotStarted) {
                 failedCount++
                 lastLog = "USSD request could not start"
-                saveLog(this, "[$now $time] ERROR [$simLabel]: Unable to start USSD for $phone")
+                saveLog(
+                    this,
+                    "[$now $time] ERROR [$simLabel]: Unable to start USSD for $phone (${sanitizeLog(startResult.reason)})",
+                )
                 updateNotification()
                 onUpdate?.invoke()
             }
