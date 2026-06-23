@@ -35,18 +35,18 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.CheckCircle as FilledCheckCircle
 import androidx.compose.material.icons.filled.Dashboard
-import androidx.compose.material.icons.filled.ListAlt
+import androidx.compose.material.icons.filled.ListAlt as FilledListAlt
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.CheckCircle as OutlinedCheckCircle
 import androidx.compose.material.icons.outlined.Contacts
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.DeleteForever
 import androidx.compose.material.icons.outlined.Group
-import androidx.compose.material.icons.outlined.ListAlt
+import androidx.compose.material.icons.outlined.ListAlt as OutlinedListAlt
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -173,8 +173,8 @@ fun App() {
     val tabs = listOf(
         "Dashboard" to Icons.Filled.Dashboard,
         "Saved" to Icons.Outlined.Group,
-        "Installed" to Icons.Filled.CheckCircle,
-        "Logs" to Icons.Filled.ListAlt,
+        "Installed" to FilledCheckCircle,
+        "Logs" to FilledListAlt,
         "Settings" to Icons.Filled.Settings,
     )
 
@@ -695,7 +695,7 @@ fun Installed() {
         Spacer(Modifier.height(16.dp))
 
         if (nums.isEmpty()) {
-            Emp(Icons.Outlined.CheckCircle, "No installed numbers", "Confirmed installs will be listed here.")
+            Emp(OutlinedCheckCircle, "No installed numbers", "Confirmed installs will be listed here.")
         } else {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 items(nums, key = { it.phone }) { number ->
@@ -711,7 +711,7 @@ fun Installed() {
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Icon(
-                                Icons.Filled.CheckCircle,
+                                FilledCheckCircle,
                                 contentDescription = null,
                                 tint = C.Green,
                                 modifier = Modifier.size(24.dp),
@@ -817,7 +817,7 @@ fun Logs() {
 
         Spacer(Modifier.height(12.dp))
         if (filteredLogs.isEmpty()) {
-            Emp(Icons.Outlined.ListAlt, "No logs yet", "New automation activity will appear here.")
+            Emp(OutlinedListAlt, "No logs yet", "New automation activity will appear here.")
         } else {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(filteredLogs) { log ->
@@ -853,6 +853,7 @@ fun Logs() {
 fun Settings() {
     val ctx = LocalContext.current
     val prefs = ctx.getSharedPreferences(SETTINGS_PREFS, Context.MODE_PRIVATE)
+    val appVersion = remember { appVersionName(ctx) }
     var dailyTargetInput by remember {
         mutableStateOf(prefs.getInt(KEY_DAILY_TARGET, DEFAULT_DAILY_TARGET).toString())
     }
@@ -1051,7 +1052,7 @@ fun Settings() {
         }
 
         Text(
-            text = "One Nation v1.0.12",
+            text = "One Nation v$appVersion",
             modifier = Modifier.fillMaxWidth(),
             textAlign = TextAlign.Center,
             color = C.Text3,
@@ -1199,6 +1200,20 @@ fun startRecommendationService(ctx: Context) {
     } catch (e: Exception) {
         Toast.makeText(ctx, e.message ?: "Unable to start service", Toast.LENGTH_LONG).show()
         saveLog(ctx, "[START ERROR] ${e.javaClass.simpleName}: ${e.message.orEmpty()}")
+    }
+}
+
+fun appVersionName(ctx: Context): String {
+    return try {
+        val packageInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            ctx.packageManager.getPackageInfo(ctx.packageName, PackageManager.PackageInfoFlags.of(0))
+        } else {
+            @Suppress("DEPRECATION")
+            ctx.packageManager.getPackageInfo(ctx.packageName, 0)
+        }
+        packageInfo.versionName.orEmpty().ifBlank { "unknown" }
+    } catch (_: Exception) {
+        "unknown"
     }
 }
 
