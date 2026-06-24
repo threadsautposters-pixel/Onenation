@@ -230,7 +230,7 @@ class RecommendationService : Service() {
 
                         RecommendationResult.ALREADY_INSTALLED -> {
                             installedCount++
-                            lastLog = "Already installed: $phone"
+                            lastLog = "Not eligible, skipping: $phone"
                             ContactManager.moveToInstalled(this, phone)
                             saveLog(this, "[$now $time] INSTALLED [$simLabel]: $phone")
                         }

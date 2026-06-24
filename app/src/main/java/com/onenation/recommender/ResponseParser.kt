@@ -3,7 +3,11 @@ object ResponseParser {
     fun parse(response: String): RecommendationResult {
         val clean = response.lowercase().trim()
         return when {
-            clean.contains("already has")||clean.contains("not eligible")||clean.contains("already installed") -> RecommendationResult.ALREADY_INSTALLED
+            clean.contains("already has") ||
+                clean.contains("not eligible") ||
+                clean.contains("already installed") ||
+                clean.contains("already been recommended") ||
+                clean.contains("recommend to a different customer") -> RecommendationResult.ALREADY_INSTALLED
             clean.contains("submitted")||clean.contains("will earn")||clean.contains("commission") -> RecommendationResult.SUBMITTED
             else -> RecommendationResult.FAILED
         }
