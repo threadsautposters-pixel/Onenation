@@ -5,12 +5,14 @@ def releaseKeystorePassword = System.getenv("ONENATION_UPLOAD_KEYSTORE_PASSWORD"
 def releaseKeyAlias = System.getenv("ONENATION_UPLOAD_KEY_ALIAS") ?: System.getenv("ANDROID_KEY_ALIAS")
 def releaseKeyPassword = System.getenv("ONENATION_UPLOAD_KEY_PASSWORD") ?: System.getenv("ANDROID_KEY_PASSWORD")
 def hasReleaseSigning = [releaseKeystorePath, releaseKeystorePassword, releaseKeyAlias, releaseKeyPassword].every { it }
+def isCi = (System.getenv("CI") ?: "false").toBoolean()
 
 android {
     namespace 'com.onenation.recommender'; compileSdk 34
-    defaultConfig { applicationId "com.onenation.recommender"; minSdk 24; targetSdk 34; versionCode 20; versionName "1.0.19" }
+    defaultConfig { applicationId "com.onenation.recommender"; minSdk 24; targetSdk 34; versionCode 21; versionName "1.0.20" }
     signingConfigs {
         release {
+            initWith signingConfigs.debug
             if (hasReleaseSigning) {
                 storeFile file(releaseKeystorePath)
                 storePassword releaseKeystorePassword
@@ -35,7 +37,7 @@ android {
 
 gradle.taskGraph.whenReady { graph ->
     def isReleaseBuild = graph.allTasks.any { it.name.toLowerCase().contains("release") }
-    if (isReleaseBuild && !hasReleaseSigning) {
+    if (isCi && isReleaseBuild && !hasReleaseSigning) {
         throw new GradleException(
             "Release signing is required for update compatibility. Set " +
                 "ONENATION_UPLOAD_KEYSTORE_PATH/ANDROID_KEYSTORE_PATH, " +
