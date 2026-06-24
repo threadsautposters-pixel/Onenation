@@ -138,6 +138,10 @@ object ContactManager {
         saveInstalled(context, getInstalled(context).filter { it.phone != phone })
     }
 
+    fun terminateNumber(context: Context, phone: String) {
+        deleteNumber(context, phone)
+    }
+
     fun isInstalled(context: Context, phone: String): Boolean = getInstalled(context).any { it.phone == phone }
 
     fun isPending(context: Context, phone: String): Boolean = getPending(context).any { it.phone == phone }

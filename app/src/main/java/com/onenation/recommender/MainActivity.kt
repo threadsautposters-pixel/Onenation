@@ -279,6 +279,9 @@ fun Dash() {
     var lt by remember { mutableLongStateOf(ContactManager.getLifetimeTotal(ctx)) }
     var ls by remember { mutableLongStateOf(ContactManager.getLifetimeSuccess(ctx)) }
     var gc by remember { mutableLongStateOf(ContactManager.getGeneratedCount(ctx)) }
+    var weeklyCommission by remember { mutableStateOf(CommissionManager.getWeeklyCommission(ctx)) }
+    var monthlyCommission by remember { mutableStateOf(CommissionManager.getMonthlyCommission(ctx)) }
+    var lifetimeCommission by remember { mutableStateOf(CommissionManager.getLifetimeCommission(ctx)) }
     var dailyTarget by remember { mutableIntStateOf(prefs.getInt(KEY_DAILY_TARGET, DEFAULT_DAILY_TARGET)) }
     var executionIntervalLabel by remember { mutableStateOf(describeExecutionInterval(ctx)) }
     var pauseRemainingMs by remember { mutableLongStateOf(AutomationPauseManager.getRemainingPauseMs(ctx)) }
@@ -296,6 +299,9 @@ fun Dash() {
         lt = ContactManager.getLifetimeTotal(ctx)
         ls = ContactManager.getLifetimeSuccess(ctx)
         gc = ContactManager.getGeneratedCount(ctx)
+        weeklyCommission = CommissionManager.getWeeklyCommission(ctx)
+        monthlyCommission = CommissionManager.getMonthlyCommission(ctx)
+        lifetimeCommission = CommissionManager.getLifetimeCommission(ctx)
         dailyTarget = prefs.getInt(KEY_DAILY_TARGET, DEFAULT_DAILY_TARGET)
         executionIntervalLabel = describeExecutionInterval(ctx)
         pauseRemainingMs = AutomationPauseManager.getRemainingPauseMs(ctx)
@@ -389,6 +395,9 @@ fun Dash() {
                 MetricItem("Generated", "$gc", C.Blue),
                 MetricItem("Pending", "$pc", C.Orange),
                 MetricItem("Installed", "$si", C.Green),
+                MetricItem("Weekly Com.", formatCommission(weeklyCommission), C.Green),
+                MetricItem("Monthly Com.", formatCommission(monthlyCommission), C.Blue),
+                MetricItem("Lifetime Com.", formatCommission(lifetimeCommission), C.Purple),
                 MetricItem("Daily Target", "$dailyTarget", C.Text1),
                 MetricItem(
                     "Pause Left",
@@ -406,6 +415,12 @@ fun Dash() {
                 "When automation is started it keeps running in the background with a foreground notification, and the service resumes after reboot if it was active.",
                 color = C.Text2,
                 fontSize = 13.sp,
+            )
+            Spacer(Modifier.height(10.dp))
+            Text(
+                "Incoming calls pause automation until the line is idle, M-Pesa SMS pauses it temporarily, and commission SMS totals are stored across app restarts.",
+                color = C.Text3,
+                fontSize = 12.sp,
             )
         }
     }
@@ -951,7 +966,7 @@ fun Settings() {
     var clr by remember { mutableStateOf(false) }
     var simOptions by remember { mutableStateOf(SimSelection.getAvailableSimOptions(ctx)) }
     var simId by remember { mutableIntStateOf(SimSelection.getStoredSubscriptionId(ctx)) }
-    var restoreUri by remember { mutableStateOf<Uri?>(null) }
+    var restoreUris by remember { mutableStateOf<List<Uri>>(emptyList()) }
 
     val downloadBackupLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
@@ -971,9 +986,9 @@ fun Settings() {
         }
 
     val restoreBackupLauncher =
-        rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-            if (uri == null) return@rememberLauncherForActivityResult
-            restoreUri = uri
+        rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+            if (uris.isEmpty()) return@rememberLauncherForActivityResult
+            restoreUris = uris
         }
 
     Column(
@@ -1226,7 +1241,7 @@ fun Settings() {
                 Spacer(Modifier.width(10.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text("Restore Backup Data", color = C.Text1, fontWeight = FontWeight.SemiBold)
-                    Text("Load backup file and overwrite current data", color = C.Text2, fontSize = 12.sp)
+                    Text("Select one or more backups and merge them with current data", color = C.Text2, fontSize = 12.sp)
                 }
             }
             Spacer(Modifier.height(10.dp))
@@ -1277,6 +1292,12 @@ fun Settings() {
             StatRow("Pending numbers", "${ContactManager.getPendingCount(ctx)}")
             Divider(color = C.Border, modifier = Modifier.padding(vertical = 8.dp))
             StatRow("Installed numbers", "${ContactManager.getInstalledCount(ctx)}")
+            Divider(color = C.Border, modifier = Modifier.padding(vertical = 8.dp))
+            StatRow("Weekly commission", formatCommission(CommissionManager.getWeeklyCommission(ctx)))
+            Divider(color = C.Border, modifier = Modifier.padding(vertical = 8.dp))
+            StatRow("Monthly commission", formatCommission(CommissionManager.getMonthlyCommission(ctx)))
+            Divider(color = C.Border, modifier = Modifier.padding(vertical = 8.dp))
+            StatRow("Lifetime commission", formatCommission(CommissionManager.getLifetimeCommission(ctx)))
         }
 
         Text(
@@ -1321,22 +1342,27 @@ fun Settings() {
         )
     }
 
-    if (restoreUri != null) {
+    if (restoreUris.isNotEmpty()) {
         AlertDialog(
-            onDismissRequest = { restoreUri = null },
+            onDismissRequest = { restoreUris = emptyList() },
             containerColor = C.Card,
-            title = { Text("Restore backup data?", color = C.Text1) },
-            text = { Text("This will overwrite your current numbers, logs and settings.", color = C.Text2) },
+            title = { Text("Merge backup data?", color = C.Text1) },
+            text = {
+                Text(
+                    "This will merge ${restoreUris.size} backup file(s) with your current numbers, logs and totals. The app settings will use the backup with the most data.",
+                    color = C.Text2,
+                )
+            },
             confirmButton = {
                 TextButton(
                     onClick = {
-                        val selected = restoreUri
-                        restoreUri = null
-                        if (selected == null) return@TextButton
+                        val selected = restoreUris
+                        restoreUris = emptyList()
+                        if (selected.isEmpty()) return@TextButton
                         scope.launch {
                             val result = runCatching {
                                 withContext(Dispatchers.IO) {
-                                    BackupData.restoreFromBackup(ctx, selected)
+                                    BackupData.restoreFromBackups(ctx, selected)
                                 }
                             }
                             if (result.isSuccess) {
@@ -1349,7 +1375,7 @@ fun Settings() {
                             }
                             Toast.makeText(
                                 ctx,
-                                if (result.isSuccess) "Backup restored" else "Restore failed: ${result.exceptionOrNull()?.message.orEmpty()}",
+                                if (result.isSuccess) "Backup data merged" else "Restore failed: ${result.exceptionOrNull()?.message.orEmpty()}",
                                 Toast.LENGTH_LONG,
                             ).show()
                         }
@@ -1359,7 +1385,7 @@ fun Settings() {
                 }
             },
             dismissButton = {
-                TextButton(onClick = { restoreUri = null }) {
+                TextButton(onClick = { restoreUris = emptyList() }) {
                     Text("Cancel", color = C.Text2)
                 }
             },
@@ -1512,4 +1538,13 @@ fun loadLogs(ctx: Context): List<String> {
         result.add(logs.getString(index))
     }
     return result.reversed()
+}
+
+fun formatCommission(value: Double): String {
+    val whole = value.toLong().toDouble() == value
+    return if (whole) {
+        "Ksh ${value.toLong()}"
+    } else {
+        "Ksh %.2f".format(Locale.US, value)
+    }
 }

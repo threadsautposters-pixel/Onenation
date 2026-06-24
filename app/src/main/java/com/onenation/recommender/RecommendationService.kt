@@ -24,6 +24,7 @@ class RecommendationService : Service() {
         private const val CHANNEL_ID = "on"
         private const val NOTIFICATION_ID = 4001
         private const val PAUSE_POLL_MS = 2_000L
+        private const val USSD_EXECUTION_TIMEOUT_MS = 30_000L
 
         var isRunning = false
         var successCount = 0
@@ -196,117 +197,144 @@ class RecommendationService : Service() {
             scheduleNextRun(resolveNextDelay())
         }
 
+        var completed = false
+        lateinit var timeoutRunnable: Runnable
+
+        fun completeOnce(block: () -> Unit) {
+            if (completed) return
+            completed = true
+            handler.removeCallbacks(timeoutRunnable)
+            block()
+            updateNotification()
+            onUpdate?.invoke()
+            finishProcessing()
+        }
+
+        fun terminateCurrentNumber(reason: String, detail: String) {
+            failedCount++
+            ContactManager.terminateNumber(this, phone)
+            lastLog = reason
+            saveLog(this, "[$now $time] FAILED [$simLabel]: $phone")
+            saveLog(this, "[$now $time] TERMINATED [$simLabel]: $phone (${sanitizeLog(detail)})")
+        }
+
+        timeoutRunnable = Runnable {
+            completeOnce {
+                terminateCurrentNumber(
+                    reason = "Timed out on $phone",
+                    detail = "USSD execution did not complete within ${USSD_EXECUTION_TIMEOUT_MS / 1000}s",
+                )
+            }
+        }
+        handler.postDelayed(timeoutRunnable, USSD_EXECUTION_TIMEOUT_MS)
+
         try {
             val telephonyManager = SimSelection.getTelephonyManager(this)
             val startResult = SilentUssd.execute(
                 tm = telephonyManager,
                 code = code,
                 ok = { response ->
-                    val finalResponse = response.ifBlank { "No response text returned" }
-                    saveLog(
-                        this,
-                        "[$now $time] USSD RESPONSE [$simLabel]: ${sanitizeLog(finalResponse)}",
-                    )
+                    completeOnce {
+                        val finalResponse = response.ifBlank { "No response text returned" }
+                        saveLog(
+                            this,
+                            "[$now $time] USSD RESPONSE [$simLabel]: ${sanitizeLog(finalResponse)}",
+                        )
 
-                    when (ResponseParser.parse(response)) {
-                        RecommendationResult.SUBMITTED -> {
-                            successCount++
-                            lastLog = "Success on $phone"
-                            if (!ContactManager.isPending(this, phone)) {
-                                ContactManager.saveNumber(
-                                    this,
-                                    SavedNumber(
-                                        phone = phone,
-                                        dateAdded = now,
-                                        timeAdded = time,
-                                        status = "PENDING",
-                                        source = "GENERATED",
-                                    ),
+                        when (ResponseParser.parse(response)) {
+                            RecommendationResult.SUBMITTED -> {
+                                successCount++
+                                lastLog = "Success on $phone"
+                                if (!ContactManager.isPending(this, phone)) {
+                                    ContactManager.saveNumber(
+                                        this,
+                                        SavedNumber(
+                                            phone = phone,
+                                            dateAdded = now,
+                                            timeAdded = time,
+                                            status = "PENDING",
+                                            source = "GENERATED",
+                                        ),
+                                    )
+                                }
+                                ContactManager.updateLastAttempted(this, phone)
+                                saveLog(this, "[$now $time] SUCCESS [$simLabel]: $phone")
+                            }
+
+                            RecommendationResult.ALREADY_RECOMMENDED -> {
+                                installedCount++
+                                lastLog = "Already recommended: $phone"
+                                if (!ContactManager.isPending(this, phone) && !ContactManager.isInstalled(this, phone)) {
+                                    ContactManager.saveNumber(
+                                        this,
+                                        SavedNumber(
+                                            phone = phone,
+                                            dateAdded = now,
+                                            timeAdded = time,
+                                            status = "PENDING",
+                                            source = "GENERATED",
+                                        ),
+                                    )
+                                }
+                                ContactManager.moveToInstalled(this, phone)
+                                saveLog(this, "[$now $time] ALREADY RECOMMENDED [$simLabel]: $phone")
+                            }
+
+                            RecommendationResult.ALREADY_INSTALLED -> {
+                                installedCount++
+                                lastLog = "Already installed: $phone"
+                                if (!ContactManager.isPending(this, phone) && !ContactManager.isInstalled(this, phone)) {
+                                    ContactManager.saveNumber(
+                                        this,
+                                        SavedNumber(
+                                            phone = phone,
+                                            dateAdded = now,
+                                            timeAdded = time,
+                                            status = "PENDING",
+                                            source = "GENERATED",
+                                        ),
+                                    )
+                                }
+                                ContactManager.moveToInstalled(this, phone)
+                                saveLog(this, "[$now $time] INSTALLED [$simLabel]: $phone")
+                            }
+
+                            RecommendationResult.FAILED -> {
+                                terminateCurrentNumber(
+                                    reason = "Terminated $phone after invalid response",
+                                    detail = finalResponse,
                                 )
                             }
-                            ContactManager.updateLastAttempted(this, phone)
-                            saveLog(this, "[$now $time] SUCCESS [$simLabel]: $phone")
-                        }
-
-                        RecommendationResult.ALREADY_RECOMMENDED -> {
-                            installedCount++
-                            lastLog = "Already recommended: $phone"
-                            if (!ContactManager.isPending(this, phone) && !ContactManager.isInstalled(this, phone)) {
-                                ContactManager.saveNumber(
-                                    this,
-                                    SavedNumber(
-                                        phone = phone,
-                                        dateAdded = now,
-                                        timeAdded = time,
-                                        status = "PENDING",
-                                        source = "GENERATED",
-                                    ),
-                                )
-                            }
-                            ContactManager.moveToInstalled(this, phone)
-                            saveLog(this, "[$now $time] ALREADY RECOMMENDED [$simLabel]: $phone")
-                        }
-
-                        RecommendationResult.ALREADY_INSTALLED -> {
-                            installedCount++
-                            lastLog = "Already installed: $phone"
-                            if (!ContactManager.isPending(this, phone) && !ContactManager.isInstalled(this, phone)) {
-                                ContactManager.saveNumber(
-                                    this,
-                                    SavedNumber(
-                                        phone = phone,
-                                        dateAdded = now,
-                                        timeAdded = time,
-                                        status = "PENDING",
-                                        source = "GENERATED",
-                                    ),
-                                )
-                            }
-                            ContactManager.moveToInstalled(this, phone)
-                            saveLog(this, "[$now $time] INSTALLED [$simLabel]: $phone")
-                        }
-
-                        RecommendationResult.FAILED -> {
-                            failedCount++
-                            lastLog = "Failed on $phone"
-                            saveLog(this, "[$now $time] FAILED [$simLabel]: $phone")
                         }
                     }
-
-                    updateNotification()
-                    onUpdate?.invoke()
-                    finishProcessing()
                 },
                 err = { error ->
-                    failedCount++
-                    val message = error.ifBlank { "Unknown USSD error" }
-                    lastLog = "USSD error on $phone"
-                    saveLog(this, "[$now $time] USSD ERROR [$simLabel]: ${sanitizeLog(message)}")
-                    saveLog(this, "[$now $time] ERROR [$simLabel]: $phone")
-                    updateNotification()
-                    onUpdate?.invoke()
-                    finishProcessing()
+                    completeOnce {
+                        val message = error.ifBlank { "Unknown USSD error" }
+                        saveLog(this, "[$now $time] USSD ERROR [$simLabel]: ${sanitizeLog(message)}")
+                        terminateCurrentNumber(
+                            reason = "USSD error on $phone",
+                            detail = message,
+                        )
+                    }
                 },
             )
 
             if (startResult is SilentUssd.StartResult.NotStarted) {
-                failedCount++
-                lastLog = "USSD request could not start"
-                saveLog(
-                    this,
-                    "[$now $time] ERROR [$simLabel]: Unable to start USSD for $phone (${sanitizeLog(startResult.reason)})",
-                )
-                updateNotification()
-                onUpdate?.invoke()
-                finishProcessing()
+                completeOnce {
+                    terminateCurrentNumber(
+                        reason = "USSD request could not start",
+                        detail = "Unable to start USSD for $phone (${sanitizeLog(startResult.reason)})",
+                    )
+                }
             }
         } catch (e: Exception) {
-            failedCount++
-            lastLog = "Crash prevented while processing $phone"
-            saveLog(this, "[$now $time] ERROR [$simLabel]: ${e.javaClass.simpleName}: ${e.message.orEmpty()}")
-            updateNotification()
-            onUpdate?.invoke()
-            finishProcessing()
+            completeOnce {
+                terminateCurrentNumber(
+                    reason = "Crash prevented while processing $phone",
+                    detail = "${e.javaClass.simpleName}: ${e.message.orEmpty()}",
+                )
+            }
         }
     }
 
@@ -325,6 +353,21 @@ class RecommendationService : Service() {
         isProcessing = false
         handler.removeCallbacks(worker)
         super.onDestroy()
+    }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        if (
+            getSharedPreferences(SETTINGS_PREFS, Context.MODE_PRIVATE)
+                .getBoolean(KEY_KEEP_SERVICE_RUNNING, false)
+        ) {
+            val restartIntent = Intent(applicationContext, RecommendationService::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(restartIntent)
+            } else {
+                startService(restartIntent)
+            }
+        }
+        super.onTaskRemoved(rootIntent)
     }
 
     private fun updateNotification() {

@@ -3,20 +3,40 @@ package com.onenation.recommender
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.telephony.SmsMessage
+import android.provider.Telephony
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 class MpesaContactImporter : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        val pdus = intent.extras?.get("pdus") as? Array<*> ?: return
+        val groupedMessages = linkedMapOf<String, StringBuilder>()
+        val messages = Telephony.Sms.Intents.getMessagesFromIntent(intent)
+        if (messages.isEmpty()) return
 
-        for (pdu in pdus) {
-            val sms = SmsMessage.createFromPdu(pdu as ByteArray)
-            val body = sms.messageBody ?: continue
+        messages.forEach { sms ->
             val sender = sms.originatingAddress.orEmpty()
+            val body = sms.messageBody.orEmpty()
+            val key = "${sender.lowercase(Locale.getDefault())}:${sms.timestampMillis}"
+            groupedMessages.getOrPut(key) { StringBuilder() }.append(body)
+        }
+
+        groupedMessages.forEach { (key, value) ->
+            val sender = key.substringBefore(':')
+            val body = value.toString()
             val normalizedBody = body.lowercase(Locale.getDefault())
+
+            if (CommissionManager.maybeRecordFromSms(context, sender, body)) {
+                val amount = Regex("""ksh\s*([0-9]+(?:\.[0-9]+)?)\s+commission""", RegexOption.IGNORE_CASE)
+                    .find(body)
+                    ?.groupValues
+                    ?.getOrNull(1)
+                    .orEmpty()
+                saveLog(context, "[INFO] Commission SMS recorded: Ksh $amount")
+                RecommendationService.lastLog = "Commission recorded: Ksh $amount"
+                RecommendationService.onUpdate?.invoke()
+            }
+
             val isMpesaMessage =
                 sender.equals("MPESA", true) ||
                     body.contains("M-Pesa", true) ||
