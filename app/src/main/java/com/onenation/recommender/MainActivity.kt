@@ -16,31 +16,19 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
@@ -50,14 +38,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Dashboard
-import androidx.compose.material.icons.filled.FlashlightOff
-import androidx.compose.material.icons.filled.FlashlightOn
 import androidx.compose.material.icons.filled.ListAlt
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.CheckCircle
@@ -95,23 +79,17 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.layout.BoxScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -146,17 +124,6 @@ private object C {
     val Text1 = Color(0xFFF8FAFC)
     val Text2 = Color(0xFFB8C5D6)
     val Text3 = Color(0xFF71839B)
-    val Void = Color(0xFF0A0C0F)
-    val ScannerBg = Color(0xFF14181D)
-    val ScannerPanel = Color(0xFF1B2027)
-    val ScannerPanel2 = Color(0xFF21272F)
-    val ScannerLine = Color.White.copy(alpha = 0.07f)
-    val Amber = Color(0xFFFFB454)
-    val AmberDim = Color(0xFF8A6A3D)
-    val RelayCyan = Color(0xFF74E6D8)
-    val RelayCyanDim = Color(0xFF3A5E5A)
-    val RelayInk = Color(0xFFE9E7E2)
-    val RelayInkDim = Color(0xFF7D848C)
 }
 
 class MainActivity : ComponentActivity() {
@@ -210,7 +177,6 @@ class MainActivity : ComponentActivity() {
 fun App() {
     var selectedTab by remember { mutableIntStateOf(0) }
     val tabs = listOf(
-        "Scanner" to Icons.Filled.QrCodeScanner,
         "Dashboard" to Icons.Filled.Dashboard,
         "Saved" to Icons.Outlined.Group,
         "Installed" to Icons.Filled.CheckCircle,
@@ -250,11 +216,10 @@ fun App() {
                     )
                     Box(modifier = Modifier.weight(1f)) {
                         when (selectedTab) {
-                            0 -> Scanner(onBackRequest = { selectedTab = 1 })
-                            1 -> Dash()
-                            2 -> Saved()
-                            3 -> Installed()
-                            4 -> Logs()
+                            0 -> Dash()
+                            1 -> Saved()
+                            2 -> Installed()
+                            3 -> Logs()
                             else -> Settings()
                         }
                     }
@@ -296,414 +261,6 @@ fun AppTopTabs(
                 )
             }
         }
-    }
-}
-
-@Composable
-fun Scanner(onBackRequest: () -> Unit) {
-    var torchEnabled by remember { mutableStateOf(false) }
-    var dotCount by remember { mutableIntStateOf(0) }
-    val backAction by rememberUpdatedState(onBackRequest)
-    val transition = rememberInfiniteTransition(label = "scanner")
-    val beamProgress by transition.animateFloat(
-        initialValue = 0.06f,
-        targetValue = 0.78f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 2600, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "beam",
-    )
-    val pulseProgress by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 2800, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart,
-        ),
-        label = "pulse",
-    )
-    val ledAlpha by transition.animateFloat(
-        initialValue = 1f,
-        targetValue = 0.35f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 2200, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "led",
-    )
-    val cursorAlpha by transition.animateFloat(
-        initialValue = 1f,
-        targetValue = 0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1000, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "cursor",
-    )
-
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(500)
-            dotCount = (dotCount + 1) % 4
-        }
-    }
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                Brush.radialGradient(
-                    colors = listOf(C.ScannerPanel.copy(alpha = 0.45f), C.Void),
-                    radius = 1200f,
-                ),
-            )
-            .padding(14.dp),
-    ) {
-        Card(
-            modifier = Modifier.fillMaxSize(),
-            colors = CardDefaults.cardColors(containerColor = C.ScannerBg),
-            shape = RoundedCornerShape(34.dp),
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 18.dp, vertical = 20.dp),
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    ScannerIconButton(
-                        icon = Icons.Filled.ArrowBack,
-                        contentDescription = "Go back",
-                        onClick = backAction,
-                    )
-                    Text(
-                        text = "LINK TERMINAL",
-                        color = C.RelayInk,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace,
-                        letterSpacing = 2.sp,
-                    )
-                    Row(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(20.dp))
-                            .background(C.ScannerPanel)
-                            .border(1.dp, C.ScannerLine, RoundedCornerShape(20.dp))
-                            .padding(horizontal = 10.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(6.dp)
-                                .clip(RoundedCornerShape(50))
-                                .background(C.RelayCyan.copy(alpha = ledAlpha))
-                                .graphicsLayer {
-                                    shadowElevation = 12f
-                                    this.alpha = ledAlpha
-                                },
-                        )
-                        Text(
-                            text = "AGT-042",
-                            color = C.RelayInkDim,
-                            fontSize = 10.sp,
-                            fontFamily = FontFamily.Monospace,
-                            letterSpacing = 1.sp,
-                        )
-                    }
-                }
-
-                Spacer(Modifier.height(18.dp))
-
-                Column(
-                    modifier = Modifier.weight(1f),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    ScannerViewfinder(
-                        beamProgress = beamProgress,
-                        pulseProgress = pulseProgress,
-                    )
-                    Spacer(Modifier.height(26.dp))
-                    Text(
-                        text = "Scan QR to link relay",
-                        color = C.RelayInk,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        textAlign = TextAlign.Center,
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = "WAITING${".".repeat(dotCount)}",
-                        color = C.RelayCyan,
-                        fontSize = 11.sp,
-                        fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.SemiBold,
-                        letterSpacing = 2.sp,
-                    )
-                }
-
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    ScannerTorchButton(
-                        enabled = torchEnabled,
-                        onClick = { torchEnabled = !torchEnabled },
-                    )
-                    Spacer(Modifier.height(20.dp))
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center,
-                    ) {
-                        Text(
-                            text = ">>",
-                            color = C.Amber,
-                            fontSize = 11.sp,
-                            fontFamily = FontFamily.Monospace,
-                        )
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            text = "QR::RELAY_LINK",
-                            color = C.RelayInkDim,
-                            fontSize = 11.sp,
-                            fontFamily = FontFamily.Monospace,
-                        )
-                        Text(
-                            text = "  STATUS:",
-                            color = C.RelayInkDim,
-                            fontSize = 11.sp,
-                            fontFamily = FontFamily.Monospace,
-                        )
-                        Text(
-                            text = "WAITING",
-                            color = C.RelayCyan,
-                            fontSize = 11.sp,
-                            fontFamily = FontFamily.Monospace,
-                        )
-                        Text(
-                            text = "_",
-                            color = C.RelayCyan,
-                            fontSize = 11.sp,
-                            fontFamily = FontFamily.Monospace,
-                            modifier = Modifier.graphicsLayer { alpha = cursorAlpha },
-                        )
-                    }
-                    Spacer(Modifier.height(22.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        ScannerChip(label = "SECURE_LINK", color = C.RelayCyan)
-                        ScannerChip(label = "HOTSPOT_READY", color = C.Amber)
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun ScannerIconButton(
-    icon: ImageVector,
-    contentDescription: String,
-    onClick: () -> Unit,
-) {
-    Box(
-        modifier = Modifier
-            .size(38.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .background(C.ScannerPanel)
-            .border(1.dp, C.ScannerLine, RoundedCornerShape(10.dp))
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = contentDescription,
-            tint = C.RelayInk,
-            modifier = Modifier.size(18.dp),
-        )
-    }
-}
-
-@Composable
-fun ScannerViewfinder(
-    beamProgress: Float,
-    pulseProgress: Float,
-) {
-    BoxWithConstraints(
-        modifier = Modifier
-            .widthIn(max = 250.dp)
-            .fillMaxWidth(0.64f)
-            .aspectRatio(1f)
-            .clip(RoundedCornerShape(18.dp))
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(Color(0xFF11151A), Color(0xFF0C0F12)),
-                ),
-            )
-            .drawBehind {
-                val gridSpacing = 12.dp.toPx()
-                var y = 0f
-                while (y < size.height) {
-                    drawLine(
-                        color = C.RelayCyan.copy(alpha = 0.05f),
-                        start = androidx.compose.ui.geometry.Offset(0f, y),
-                        end = androidx.compose.ui.geometry.Offset(size.width, y),
-                        strokeWidth = 1.dp.toPx(),
-                    )
-                    y += gridSpacing
-                }
-            },
-    ) {
-        val viewfinderHeight = maxHeight
-        val beamOffset = with(LocalDensity.current) { (viewfinderHeight * beamProgress).toPx() }
-
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            listOf(0f, 0.34f, 0.68f).forEach { phase ->
-                val normalized = ((pulseProgress - phase) + 1f) % 1f
-                val scale = 0.4f + (normalized * 2.7f)
-                val alpha = (1f - normalized).coerceIn(0f, 1f) * 0.65f
-                Box(
-                    modifier = Modifier
-                        .size(72.dp)
-                        .graphicsLayer {
-                            scaleX = scale
-                            scaleY = scale
-                            this.alpha = alpha
-                        }
-                        .border(1.dp, C.RelayCyan, RoundedCornerShape(50)),
-                )
-            }
-        }
-
-        ScannerCorner(alignment = Alignment.TopStart)
-        ScannerCorner(alignment = Alignment.TopEnd)
-        ScannerCorner(alignment = Alignment.BottomStart)
-        ScannerCorner(alignment = Alignment.BottomEnd)
-
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp)
-                .offset(y = with(LocalDensity.current) { beamOffset.toDp() })
-                .height(34.dp)
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            Color.Transparent,
-                            C.RelayCyan.copy(alpha = 0.52f),
-                            Color.Transparent,
-                        ),
-                    ),
-                ),
-        )
-    }
-}
-
-@Composable
-fun BoxScope.ScannerCorner(alignment: Alignment) {
-    Box(
-        modifier = Modifier
-            .padding(10.dp)
-            .size(26.dp)
-            .align(alignment)
-            .drawBehind {
-                val stroke = 3.dp.toPx()
-                val maxX = size.width
-                val maxY = size.height
-                when (alignment) {
-                    Alignment.TopStart -> {
-                        drawLine(C.Amber, androidx.compose.ui.geometry.Offset(maxX, 0f), androidx.compose.ui.geometry.Offset(0f, 0f), stroke, cap = StrokeCap.Round)
-                        drawLine(C.Amber, androidx.compose.ui.geometry.Offset(0f, maxY), androidx.compose.ui.geometry.Offset(0f, 0f), stroke, cap = StrokeCap.Round)
-                    }
-                    Alignment.TopEnd -> {
-                        drawLine(C.Amber, androidx.compose.ui.geometry.Offset(0f, 0f), androidx.compose.ui.geometry.Offset(maxX, 0f), stroke, cap = StrokeCap.Round)
-                        drawLine(C.Amber, androidx.compose.ui.geometry.Offset(maxX, maxY), androidx.compose.ui.geometry.Offset(maxX, 0f), stroke, cap = StrokeCap.Round)
-                    }
-                    Alignment.BottomStart -> {
-                        drawLine(C.Amber, androidx.compose.ui.geometry.Offset(maxX, maxY), androidx.compose.ui.geometry.Offset(0f, maxY), stroke, cap = StrokeCap.Round)
-                        drawLine(C.Amber, androidx.compose.ui.geometry.Offset(0f, 0f), androidx.compose.ui.geometry.Offset(0f, maxY), stroke, cap = StrokeCap.Round)
-                    }
-                    else -> {
-                        drawLine(C.Amber, androidx.compose.ui.geometry.Offset(0f, maxY), androidx.compose.ui.geometry.Offset(maxX, maxY), stroke, cap = StrokeCap.Round)
-                        drawLine(C.Amber, androidx.compose.ui.geometry.Offset(maxX, 0f), androidx.compose.ui.geometry.Offset(maxX, maxY), stroke, cap = StrokeCap.Round)
-                    }
-                }
-            },
-    )
-}
-
-@Composable
-fun ScannerTorchButton(
-    enabled: Boolean,
-    onClick: () -> Unit,
-) {
-    Box(
-        modifier = Modifier
-            .size(60.dp)
-            .clip(RoundedCornerShape(50))
-            .background(
-                if (enabled) {
-                    Brush.radialGradient(
-                        colors = listOf(C.Amber, C.AmberDim),
-                    )
-                } else {
-                    Brush.linearGradient(
-                        colors = listOf(C.ScannerPanel2, C.ScannerPanel),
-                    )
-                },
-            )
-            .border(
-                width = 1.dp,
-                color = if (enabled) C.Amber.copy(alpha = 0.5f) else C.ScannerLine,
-                shape = RoundedCornerShape(50),
-            )
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        if (enabled) {
-            Box(
-                modifier = Modifier
-                    .size(84.dp)
-                    .clip(RoundedCornerShape(50))
-                    .border(1.dp, C.Amber.copy(alpha = 0.25f), RoundedCornerShape(50)),
-            )
-        }
-        Icon(
-            imageVector = if (enabled) Icons.Filled.FlashlightOn else Icons.Filled.FlashlightOff,
-            contentDescription = "Toggle flashlight",
-            tint = if (enabled) Color(0xFF1A1306) else C.RelayInkDim,
-            modifier = Modifier.size(24.dp),
-        )
-    }
-}
-
-@Composable
-fun ScannerChip(label: String, color: Color) {
-    Row(
-        modifier = Modifier
-            .clip(RoundedCornerShape(20.dp))
-            .background(C.ScannerPanel)
-            .border(1.dp, C.ScannerLine, RoundedCornerShape(20.dp))
-            .padding(horizontal = 13.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(7.dp),
-    ) {
-        Box(
-            modifier = Modifier
-                .size(6.dp)
-                .clip(RoundedCornerShape(50))
-                .background(color),
-        )
-        Text(
-            text = label,
-            color = C.RelayInkDim,
-            fontSize = 10.sp,
-            fontFamily = FontFamily.Monospace,
-            letterSpacing = 1.sp,
-        )
     }
 }
 
