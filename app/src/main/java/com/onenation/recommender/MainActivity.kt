@@ -35,18 +35,18 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle as FilledCheckCircle
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Dashboard
-import androidx.compose.material.icons.filled.ListAlt as FilledListAlt
+import androidx.compose.material.icons.filled.ListAlt
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material.icons.outlined.CheckCircle as OutlinedCheckCircle
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Contacts
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.DeleteForever
 import androidx.compose.material.icons.outlined.Group
-import androidx.compose.material.icons.outlined.ListAlt as OutlinedListAlt
+import androidx.compose.material.icons.outlined.ListAlt
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -173,8 +173,8 @@ fun App() {
     val tabs = listOf(
         "Dashboard" to Icons.Filled.Dashboard,
         "Saved" to Icons.Outlined.Group,
-        "Installed" to FilledCheckCircle,
-        "Logs" to FilledListAlt,
+        "Installed" to Icons.Filled.CheckCircle,
+        "Logs" to Icons.Filled.ListAlt,
         "Settings" to Icons.Filled.Settings,
     )
 
@@ -699,7 +699,7 @@ fun Installed() {
         Spacer(Modifier.height(16.dp))
 
         if (nums.isEmpty()) {
-            Emp(OutlinedCheckCircle, "No installed numbers", "Confirmed installs will be listed here.")
+            Emp(Icons.Outlined.CheckCircle, "No installed numbers", "Confirmed installs will be listed here.")
         } else {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 items(nums, key = { it.phone }) { number ->
@@ -715,7 +715,7 @@ fun Installed() {
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Icon(
-                                FilledCheckCircle,
+                                Icons.Filled.CheckCircle,
                                 contentDescription = null,
                                 tint = C.Green,
                                 modifier = Modifier.size(24.dp),
@@ -821,7 +821,7 @@ fun Logs() {
 
         Spacer(Modifier.height(12.dp))
         if (filteredLogs.isEmpty()) {
-            Emp(OutlinedListAlt, "No logs yet", "New automation activity will appear here.")
+            Emp(Icons.Outlined.ListAlt, "No logs yet", "New automation activity will appear here.")
         } else {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(filteredLogs) { log ->
