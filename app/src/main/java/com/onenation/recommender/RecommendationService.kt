@@ -158,14 +158,6 @@ class RecommendationService : Service() {
             return QueueDecision.Process(generated)
         }
 
-        val nextRetryDelay = ContactManager.getNextRetryDelayMs(this)
-        if (nextRetryDelay != null) {
-            return QueueDecision.Wait(
-                delayMs = nextRetryDelay,
-                reason = "Waiting ${AutomationPauseManager.describeRemaining(nextRetryDelay)} for scheduled resend",
-            )
-        }
-
         return QueueDecision.Process(generateNewPhone())
     }
 
