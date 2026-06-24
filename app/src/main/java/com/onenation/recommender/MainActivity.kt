@@ -59,10 +59,6 @@ import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
@@ -87,6 +83,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -178,48 +175,60 @@ fun App() {
         "Settings" to Icons.Filled.Settings,
     )
 
-    Scaffold(
-        containerColor = C.Bg,
-        bottomBar = {
-            NavigationBar(
-                containerColor = C.Surface,
-                modifier = Modifier.height(70.dp),
-            ) {
-                tabs.forEachIndexed { index, (label, icon) ->
-                    NavigationBarItem(
-                        selected = selectedTab == index,
-                        onClick = { selectedTab = index },
-                        icon = { Icon(icon, label, Modifier.size(22.dp)) },
-                        label = {
-                            Text(
-                                text = label,
-                                fontSize = 11.sp,
-                                fontWeight = if (selectedTab == index) FontWeight.SemiBold else FontWeight.Normal,
-                            )
-                        },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = C.Green,
-                            selectedTextColor = C.Green,
-                            unselectedIconColor = C.Text3,
-                            unselectedTextColor = C.Text3,
-                            indicatorColor = C.GreenDim,
-                        ),
-                    )
-                }
-            }
-        },
-    ) { paddingValues ->
-        Box(
+    Scaffold(containerColor = C.Bg) { paddingValues ->
+        Column(
             modifier = Modifier
                 .padding(paddingValues)
                 .fillMaxSize(),
         ) {
-            when (selectedTab) {
-                0 -> Dash()
-                1 -> Saved()
-                2 -> Installed()
-                3 -> Logs()
-                else -> Settings()
+            AppTopTabs(
+                tabs = tabs.map { it.first },
+                selectedTab = selectedTab,
+                onSelect = { selectedTab = it },
+            )
+            Box(modifier = Modifier.weight(1f)) {
+                when (selectedTab) {
+                    0 -> Dash()
+                    1 -> Saved()
+                    2 -> Installed()
+                    3 -> Logs()
+                    else -> Settings()
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun AppTopTabs(
+    tabs: List<String>,
+    selectedTab: Int,
+    onSelect: (Int) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        tabs.forEachIndexed { index, label ->
+            val selected = selectedTab == index
+            val fg = if (selected) C.Green else C.Text2
+            val bg = if (selected) C.Green.copy(alpha = 0.16f) else Color.White.copy(alpha = 0.06f)
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(bg)
+                    .clickable { onSelect(index) }
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+            ) {
+                Text(
+                    text = label,
+                    color = fg,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
             }
         }
     }
@@ -284,7 +293,8 @@ fun Dash() {
     ) {
         ScreenTitle(
             title = "One Nation",
-            subtitle = "Professional automation dashboard for recommendations",
+            subtitle = "Dispatch console for airtime & bundle automation",
+            kicker = "AGENT 042  ·  ${SimSelection.getSelectedSimLabel(ctx)}",
         )
 
         HeroStatusCard(
@@ -438,10 +448,10 @@ fun HeroStatusCard(
             ) {
                 StatusPill(
                     label = when {
-                        pauseRemainingMs > 0L -> "Paused"
-                        callInProgress -> "On Call"
-                        isRunning -> "Running"
-                        else -> "Stopped"
+                        pauseRemainingMs > 0L -> "PAUSED"
+                        callInProgress -> "ON CALL"
+                        isRunning -> "TRANSMITTING"
+                        else -> "IDLE"
                     },
                     color = when {
                         pauseRemainingMs > 0L -> C.Orange
@@ -450,16 +460,16 @@ fun HeroStatusCard(
                         else -> C.Red
                     },
                 )
-                StatusPill(label = simLabel, color = C.Blue)
+                StatusPill(label = simLabel, color = C.Orange)
             }
             Spacer(Modifier.height(16.dp))
             Text(
                 text = when {
                     pauseRemainingMs > 0L ->
                         "Automation resumes in ${AutomationPauseManager.describeRemaining(pauseRemainingMs)}"
-                    callInProgress -> "Automation waits until the current call has finished"
-                    isRunning -> "Automation is active in the background"
-                    else -> "Automation is currently paused"
+                    callInProgress -> "Automation paused while call is active"
+                    isRunning -> "Automation is dialing in the background"
+                    else -> "Automation is currently stopped"
                 },
                 color = C.Text1,
                 fontSize = 20.sp,
@@ -468,11 +478,11 @@ fun HeroStatusCard(
             Spacer(Modifier.height(6.dp))
             Text(
                 text = if (pauseRemainingMs > 0L) {
-                    "M-Pesa activity triggered a temporary hold to avoid interrupting your other automation."
+                    "Automation is temporarily held to avoid interrupting active transactions."
                 } else if (callInProgress) {
-                    "Incoming or ongoing calls pause recommendations automatically until the line is idle."
+                    "Incoming or ongoing calls pause automation until the line is idle."
                 } else {
-                    "Daily target is set to $dailyTarget and requests are processed every $executionIntervalLabel."
+                    "Ceiling set to $dailyTarget dials/day · one request goes out every $executionIntervalLabel."
                 },
                 color = C.Text2,
                 fontSize = 13.sp,
@@ -484,9 +494,20 @@ fun HeroStatusCard(
                     shape = RoundedCornerShape(16.dp),
                 ) {
                     Column(Modifier.padding(14.dp)) {
-                        Text("Latest activity", color = C.Text3, fontSize = 11.sp, letterSpacing = 1.sp)
+                        Text(
+                            "LAST TRANSMISSION",
+                            color = C.Text3,
+                            fontSize = 10.sp,
+                            letterSpacing = 1.sp,
+                            fontWeight = FontWeight.SemiBold,
+                        )
                         Spacer(Modifier.height(4.dp))
-                        Text(lastLog, color = C.Text1, fontSize = 13.sp)
+                        Text(
+                            lastLog,
+                            color = C.Green,
+                            fontSize = 12.sp,
+                            fontFamily = FontFamily.Monospace,
+                        )
                     }
                 }
             }
@@ -507,8 +528,18 @@ fun StatusPill(label: String, color: Color) {
 }
 
 @Composable
-fun ScreenTitle(title: String, subtitle: String) {
+fun ScreenTitle(title: String, subtitle: String, kicker: String? = null) {
     Column {
+        if (!kicker.isNullOrBlank()) {
+            Text(
+                kicker,
+                fontSize = 10.sp,
+                color = C.Text3,
+                letterSpacing = 2.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Spacer(Modifier.height(8.dp))
+        }
         Text(title, fontSize = 28.sp, fontWeight = FontWeight.Bold, color = C.Text1)
         Spacer(Modifier.height(4.dp))
         Text(subtitle, fontSize = 13.sp, color = C.Text2)
@@ -549,11 +580,14 @@ fun PrimaryActionButton(
         onClick = onClick,
         modifier = modifier.height(56.dp),
         shape = RoundedCornerShape(16.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = color),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = color,
+            contentColor = C.Bg,
+        ),
     ) {
-        Icon(icon, contentDescription = null, tint = Color.White)
+        Icon(icon, contentDescription = null)
         Spacer(Modifier.width(8.dp))
-        Text(label, color = Color.White, fontWeight = FontWeight.Bold)
+        Text(label, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -565,11 +599,14 @@ fun SecondaryActionButton(
     color: Color,
     onClick: () -> Unit,
 ) {
-    OutlinedButton(
+    Button(
         onClick = onClick,
         modifier = modifier.height(56.dp),
         shape = RoundedCornerShape(16.dp),
-        colors = ButtonDefaults.outlinedButtonColors(contentColor = color),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = Color.White.copy(alpha = 0.06f),
+            contentColor = color,
+        ),
     ) {
         Icon(icon, contentDescription = null)
         Spacer(Modifier.width(8.dp))
@@ -595,7 +632,11 @@ fun Saved() {
             .fillMaxSize()
             .padding(16.dp),
     ) {
-        ScreenTitle("Saved Numbers", "${nums.size} pending numbers waiting for follow-up")
+        ScreenTitle(
+            title = "Saved Numbers",
+            subtitle = "${nums.size} pending numbers waiting for follow-up",
+            kicker = "QUEUE  ·  ${SimSelection.getSelectedSimLabel(ctx)}",
+        )
         Spacer(Modifier.height(16.dp))
 
         if (nums.isEmpty()) {
@@ -689,7 +730,11 @@ fun Installed() {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            ScreenTitle("Installed", "${nums.size} confirmed installations")
+            ScreenTitle(
+                title = "Installed",
+                subtitle = "${nums.size} confirmed installations",
+                kicker = "CONFIRMED  ·  ${SimSelection.getSelectedSimLabel(ctx)}",
+            )
             if (nums.isNotEmpty()) {
                 TextButton(onClick = { clr = true }) {
                     Text("Clear All", color = C.Red)
@@ -785,7 +830,11 @@ fun Logs() {
             .fillMaxSize()
             .padding(16.dp),
     ) {
-        ScreenTitle("Activity Logs", "${filteredLogs.size} log entries")
+        ScreenTitle(
+            title = "Activity Logs",
+            subtitle = "${filteredLogs.size} log entries",
+            kicker = "MONITOR  ·  ${SimSelection.getSelectedSimLabel(ctx)}",
+        )
         Spacer(Modifier.height(12.dp))
 
         Row(
@@ -879,7 +928,11 @@ fun Settings() {
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        ScreenTitle("Settings", "Well-labelled controls with save buttons for each section")
+        ScreenTitle(
+            title = "Settings",
+            subtitle = "Device configuration for automation",
+            kicker = "CONFIG  ·  ${SimSelection.getSelectedSimLabel(ctx)}",
+        )
 
         SectionCard {
             Text("Daily Target", color = C.Text1, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
