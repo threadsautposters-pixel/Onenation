@@ -42,7 +42,7 @@ class MpesaContactImporter : BroadcastReceiver() {
                     body.contains("M-Pesa", true) ||
                     (normalizedBody.contains("confirmed") && normalizedBody.contains("received from"))
 
-            if (!isMpesaMessage) continue
+            if (!isMpesaMessage) return@forEach
 
             AutomationPauseManager.pauseForMpesa(context)
             val remaining = AutomationPauseManager.describeRemaining(
