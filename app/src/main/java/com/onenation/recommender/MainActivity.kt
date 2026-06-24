@@ -28,6 +28,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+<<<<<<< HEAD
+=======
+import androidx.compose.foundation.layout.widthIn
+>>>>>>> 441d59b (Redesign UI to match reference layout; bump version to 1.0.24)
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -175,6 +179,7 @@ fun App() {
         "Settings" to Icons.Filled.Settings,
     )
 
+<<<<<<< HEAD
     Scaffold(containerColor = C.Bg) { paddingValues ->
         Column(
             modifier = Modifier
@@ -193,6 +198,47 @@ fun App() {
                     2 -> Installed()
                     3 -> Logs()
                     else -> Settings()
+=======
+    Scaffold(containerColor = Color.Black) { paddingValues ->
+        Box(
+            modifier = Modifier
+                .padding(paddingValues)
+                .fillMaxSize()
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(
+                            C.Blue.copy(alpha = 0.22f),
+                            Color.Black,
+                        ),
+                        radius = 1200f,
+                    ),
+                ),
+            contentAlignment = Alignment.TopCenter,
+        ) {
+            Card(
+                modifier = Modifier
+                    .padding(16.dp)
+                    .fillMaxWidth()
+                    .widthIn(max = 520.dp),
+                colors = CardDefaults.cardColors(containerColor = C.Surface),
+                shape = RoundedCornerShape(30.dp),
+            ) {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    AppTopTabs(
+                        tabs = tabs.map { it.first },
+                        selectedTab = selectedTab,
+                        onSelect = { selectedTab = it },
+                    )
+                    Box(modifier = Modifier.weight(1f)) {
+                        when (selectedTab) {
+                            0 -> Dash()
+                            1 -> Saved()
+                            2 -> Installed()
+                            3 -> Logs()
+                            else -> Settings()
+                        }
+                    }
+>>>>>>> 441d59b (Redesign UI to match reference layout; bump version to 1.0.24)
                 }
             }
         }
