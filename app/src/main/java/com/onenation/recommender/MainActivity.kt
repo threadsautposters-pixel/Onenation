@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.database.Cursor
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.VibrationEffect
@@ -12,6 +13,7 @@ import android.os.Vibrator
 import android.provider.ContactsContract
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -46,6 +48,8 @@ import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Contacts
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.DeleteForever
+import androidx.compose.material.icons.outlined.FileDownload
+import androidx.compose.material.icons.outlined.FileUpload
 import androidx.compose.material.icons.outlined.Group
 import androidx.compose.material.icons.outlined.ListAlt
 import androidx.compose.material3.AlertDialog
@@ -74,6 +78,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -91,7 +96,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.core.content.ContextCompat.startForegroundService
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -929,6 +937,7 @@ fun Settings() {
     val ctx = LocalContext.current
     val prefs = ctx.getSharedPreferences(SETTINGS_PREFS, Context.MODE_PRIVATE)
     val appVersion = remember { appVersionName(ctx) }
+    val scope = rememberCoroutineScope()
     var dailyTargetInput by remember {
         mutableStateOf(prefs.getInt(KEY_DAILY_TARGET, DEFAULT_DAILY_TARGET).toString())
     }
@@ -942,6 +951,30 @@ fun Settings() {
     var clr by remember { mutableStateOf(false) }
     var simOptions by remember { mutableStateOf(SimSelection.getAvailableSimOptions(ctx)) }
     var simId by remember { mutableIntStateOf(SimSelection.getStoredSubscriptionId(ctx)) }
+    var restoreUri by remember { mutableStateOf<Uri?>(null) }
+
+    val downloadBackupLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+            if (uri == null) return@rememberLauncherForActivityResult
+            scope.launch {
+                val result = runCatching {
+                    withContext(Dispatchers.IO) {
+                        BackupData.writeBackup(ctx, uri)
+                    }
+                }
+                Toast.makeText(
+                    ctx,
+                    if (result.isSuccess) "Backup saved" else "Backup failed: ${result.exceptionOrNull()?.message.orEmpty()}",
+                    Toast.LENGTH_LONG,
+                ).show()
+            }
+        }
+
+    val restoreBackupLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            if (uri == null) return@rememberLauncherForActivityResult
+            restoreUri = uri
+        }
 
     Column(
         modifier = Modifier
@@ -1164,6 +1197,43 @@ fun Settings() {
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(14.dp))
+                    .clickable {
+                        val stamp = SimpleDateFormat("yyyyMMdd-HHmm", Locale.getDefault()).format(Date())
+                        downloadBackupLauncher.launch("OneNation-backup-$stamp.json")
+                    }
+                    .background(C.BlueDim)
+                    .padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Outlined.FileDownload, contentDescription = null, tint = C.Blue)
+                Spacer(Modifier.width(10.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Download Backup Data", color = C.Text1, fontWeight = FontWeight.SemiBold)
+                    Text("Save numbers, logs and settings to a file", color = C.Text2, fontSize = 12.sp)
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .clickable { restoreBackupLauncher.launch(arrayOf("application/json", "text/*")) }
+                    .background(C.OrangeDim)
+                    .padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Outlined.FileUpload, contentDescription = null, tint = C.Orange)
+                Spacer(Modifier.width(10.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Restore Backup Data", color = C.Text1, fontWeight = FontWeight.SemiBold)
+                    Text("Load backup file and overwrite current data", color = C.Text2, fontSize = 12.sp)
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
                     .clickable { importContacts(ctx) }
                     .background(C.BlueDim)
                     .padding(14.dp),
@@ -1245,6 +1315,51 @@ fun Settings() {
             },
             dismissButton = {
                 TextButton(onClick = { clr = false }) {
+                    Text("Cancel", color = C.Text2)
+                }
+            },
+        )
+    }
+
+    if (restoreUri != null) {
+        AlertDialog(
+            onDismissRequest = { restoreUri = null },
+            containerColor = C.Card,
+            title = { Text("Restore backup data?", color = C.Text1) },
+            text = { Text("This will overwrite your current numbers, logs and settings.", color = C.Text2) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val selected = restoreUri
+                        restoreUri = null
+                        if (selected == null) return@TextButton
+                        scope.launch {
+                            val result = runCatching {
+                                withContext(Dispatchers.IO) {
+                                    BackupData.restoreFromBackup(ctx, selected)
+                                }
+                            }
+                            if (result.isSuccess) {
+                                dailyTargetInput = prefs.getInt(KEY_DAILY_TARGET, DEFAULT_DAILY_TARGET).toString()
+                                executionIntervalInput = getExecutionIntervalValue(ctx).toString()
+                                executionIntervalUnit = getExecutionIntervalUnit(ctx)
+                                autoDeleteSelection = ContactManager.getAutoDeleteSetting(ctx)
+                                simId = SimSelection.getStoredSubscriptionId(ctx)
+                                simOptions = SimSelection.getAvailableSimOptions(ctx)
+                            }
+                            Toast.makeText(
+                                ctx,
+                                if (result.isSuccess) "Backup restored" else "Restore failed: ${result.exceptionOrNull()?.message.orEmpty()}",
+                                Toast.LENGTH_LONG,
+                            ).show()
+                        }
+                    },
+                ) {
+                    Text("Restore", color = C.Orange, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { restoreUri = null }) {
                     Text("Cancel", color = C.Text2)
                 }
             },
