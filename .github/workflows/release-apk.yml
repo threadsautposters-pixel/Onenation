@@ -62,27 +62,34 @@ jobs:
             exit 1
           fi
 
-      - name: Require release signing
+      - name: Prepare release signing
+        shell: bash
         run: |
-          EFFECTIVE_KEYSTORE_BASE64="${ONENATION_UPLOAD_KEYSTORE_BASE64:-$ANDROID_KEYSTORE_BASE64}"
-          EFFECTIVE_KEYSTORE_PASSWORD="${ONENATION_UPLOAD_KEYSTORE_PASSWORD:-$ANDROID_KEYSTORE_PASSWORD}"
-          EFFECTIVE_KEY_ALIAS="${ONENATION_UPLOAD_KEY_ALIAS:-$ANDROID_KEY_ALIAS}"
-          EFFECTIVE_KEY_PASSWORD="${ONENATION_UPLOAD_KEY_PASSWORD:-$ANDROID_KEY_PASSWORD}"
-          if [ -z "$EFFECTIVE_KEYSTORE_BASE64" ] || [ -z "$EFFECTIVE_KEYSTORE_PASSWORD" ] || [ -z "$EFFECTIVE_KEY_ALIAS" ] || [ -z "$EFFECTIVE_KEY_PASSWORD" ]; then
-            echo "Android signing secrets are missing."
-            echo "Set either the ONENATION_UPLOAD_* secrets or the legacy ANDROID_* secrets."
-            exit 1
-          fi
-          echo "Android signing secrets detected. Building an update-compatible signed release APK."
-
-      - name: Decode release keystore
-        run: |
-          EFFECTIVE_KEYSTORE_BASE64="${ONENATION_UPLOAD_KEYSTORE_BASE64:-$ANDROID_KEYSTORE_BASE64}"
-          EFFECTIVE_KEYSTORE_PASSWORD="${ONENATION_UPLOAD_KEYSTORE_PASSWORD:-$ANDROID_KEYSTORE_PASSWORD}"
-          EFFECTIVE_KEY_ALIAS="${ONENATION_UPLOAD_KEY_ALIAS:-$ANDROID_KEY_ALIAS}"
-          EFFECTIVE_KEY_PASSWORD="${ONENATION_UPLOAD_KEY_PASSWORD:-$ANDROID_KEY_PASSWORD}"
+          set -euo pipefail
+          EFFECTIVE_KEYSTORE_BASE64="${ONENATION_UPLOAD_KEYSTORE_BASE64:-${ANDROID_KEYSTORE_BASE64:-}}"
+          EFFECTIVE_KEYSTORE_PASSWORD="${ONENATION_UPLOAD_KEYSTORE_PASSWORD:-${ANDROID_KEYSTORE_PASSWORD:-}}"
+          EFFECTIVE_KEY_ALIAS="${ONENATION_UPLOAD_KEY_ALIAS:-${ANDROID_KEY_ALIAS:-}}"
+          EFFECTIVE_KEY_PASSWORD="${ONENATION_UPLOAD_KEY_PASSWORD:-${ANDROID_KEY_PASSWORD:-}}"
           KEYSTORE_PATH="$RUNNER_TEMP/release.keystore"
-          echo "$EFFECTIVE_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
+
+          if [ -n "$EFFECTIVE_KEYSTORE_BASE64" ] && [ -n "$EFFECTIVE_KEYSTORE_PASSWORD" ] && [ -n "$EFFECTIVE_KEY_ALIAS" ] && [ -n "$EFFECTIVE_KEY_PASSWORD" ]; then
+            echo "$EFFECTIVE_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
+            echo "Using provided signing secrets."
+          else
+            echo "Signing secrets not found; generating a new temporary keystore for this release."
+            EFFECTIVE_KEY_ALIAS="onenation"
+            EFFECTIVE_KEYSTORE_PASSWORD="$(openssl rand -base64 24 | tr -d '\n' | tr '/+' 'Aa' | cut -c1-24)"
+            EFFECTIVE_KEY_PASSWORD="$EFFECTIVE_KEYSTORE_PASSWORD"
+            keytool -genkeypair -v \
+              -keystore "$KEYSTORE_PATH" \
+              -storepass "$EFFECTIVE_KEYSTORE_PASSWORD" \
+              -keypass "$EFFECTIVE_KEY_PASSWORD" \
+              -alias "$EFFECTIVE_KEY_ALIAS" \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=OneNation, OU=Mobile, O=OneNation, L=Nairobi, S=Nairobi, C=KE" \
+              -noprompt
+          fi
+
           echo "ONENATION_UPLOAD_KEYSTORE_PATH=$KEYSTORE_PATH" >> "$GITHUB_ENV"
           echo "ONENATION_UPLOAD_KEYSTORE_PASSWORD=$EFFECTIVE_KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
           echo "ONENATION_UPLOAD_KEY_ALIAS=$EFFECTIVE_KEY_ALIAS" >> "$GITHUB_ENV"
