@@ -5,7 +5,6 @@ import android.content.SharedPreferences
 import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
-import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
@@ -69,12 +68,11 @@ object ContactManager {
         val pending = getPending(context).toMutableList()
         val index = pending.indexOfFirst { it.phone == phone }
         if (index < 0) return
-
-        val calendar = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, 1) }
+        val nextRetryAt = System.currentTimeMillis() + 24L * 60L * 60L * 1000L
         pending[index] = pending[index].copy(
             lastAttempted = formatNow(),
             retryCount = pending[index].retryCount + 1,
-            nextRetryTime = retryFormatter.format(calendar.time),
+            nextRetryTime = retryFormatter.format(Date(nextRetryAt)),
         )
         savePending(context, pending)
     }

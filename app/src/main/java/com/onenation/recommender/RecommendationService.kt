@@ -228,9 +228,40 @@ class RecommendationService : Service() {
                             saveLog(this, "[$now $time] SUCCESS [$simLabel]: $phone")
                         }
 
+                        RecommendationResult.ALREADY_RECOMMENDED -> {
+                            installedCount++
+                            lastLog = "Already recommended: $phone"
+                            if (!ContactManager.isPending(this, phone) && !ContactManager.isInstalled(this, phone)) {
+                                ContactManager.saveNumber(
+                                    this,
+                                    SavedNumber(
+                                        phone = phone,
+                                        dateAdded = now,
+                                        timeAdded = time,
+                                        status = "PENDING",
+                                        source = "GENERATED",
+                                    ),
+                                )
+                            }
+                            ContactManager.moveToInstalled(this, phone)
+                            saveLog(this, "[$now $time] ALREADY RECOMMENDED [$simLabel]: $phone")
+                        }
+
                         RecommendationResult.ALREADY_INSTALLED -> {
                             installedCount++
                             lastLog = "Already installed: $phone"
+                            if (!ContactManager.isPending(this, phone) && !ContactManager.isInstalled(this, phone)) {
+                                ContactManager.saveNumber(
+                                    this,
+                                    SavedNumber(
+                                        phone = phone,
+                                        dateAdded = now,
+                                        timeAdded = time,
+                                        status = "PENDING",
+                                        source = "GENERATED",
+                                    ),
+                                )
+                            }
                             ContactManager.moveToInstalled(this, phone)
                             saveLog(this, "[$now $time] INSTALLED [$simLabel]: $phone")
                         }
