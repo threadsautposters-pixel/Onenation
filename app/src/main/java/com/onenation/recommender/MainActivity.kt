@@ -241,6 +241,7 @@ fun Dash() {
     var ls by remember { mutableLongStateOf(ContactManager.getLifetimeSuccess(ctx)) }
     var gc by remember { mutableLongStateOf(ContactManager.getGeneratedCount(ctx)) }
     var dailyTarget by remember { mutableIntStateOf(prefs.getInt(KEY_DAILY_TARGET, DEFAULT_DAILY_TARGET)) }
+    var executionIntervalLabel by remember { mutableStateOf(describeExecutionInterval(ctx)) }
     var pauseRemainingMs by remember { mutableLongStateOf(AutomationPauseManager.getRemainingPauseMs(ctx)) }
     var callInProgress by remember { mutableStateOf(CallStateManager.isCallInProgress(ctx)) }
 
@@ -257,6 +258,7 @@ fun Dash() {
         ls = ContactManager.getLifetimeSuccess(ctx)
         gc = ContactManager.getGeneratedCount(ctx)
         dailyTarget = prefs.getInt(KEY_DAILY_TARGET, DEFAULT_DAILY_TARGET)
+        executionIntervalLabel = describeExecutionInterval(ctx)
         pauseRemainingMs = AutomationPauseManager.getRemainingPauseMs(ctx)
         callInProgress = CallStateManager.isCallInProgress(ctx)
     }
@@ -289,6 +291,7 @@ fun Dash() {
             isRunning = run,
             simLabel = SimSelection.getSelectedSimLabel(ctx),
             dailyTarget = dailyTarget,
+            executionIntervalLabel = executionIntervalLabel,
             lastLog = ll,
             pauseRemainingMs = pauseRemainingMs,
             callInProgress = callInProgress,
@@ -409,6 +412,7 @@ fun HeroStatusCard(
     isRunning: Boolean,
     simLabel: String,
     dailyTarget: Int,
+    executionIntervalLabel: String,
     lastLog: String,
     pauseRemainingMs: Long,
     callInProgress: Boolean,
@@ -468,7 +472,7 @@ fun HeroStatusCard(
                 } else if (callInProgress) {
                     "Incoming or ongoing calls pause recommendations automatically until the line is idle."
                 } else {
-                    "Daily target is set to $dailyTarget and requests are processed every 8 seconds."
+                    "Daily target is set to $dailyTarget and requests are processed every $executionIntervalLabel."
                 },
                 color = C.Text2,
                 fontSize = 13.sp,
@@ -857,6 +861,12 @@ fun Settings() {
     var dailyTargetInput by remember {
         mutableStateOf(prefs.getInt(KEY_DAILY_TARGET, DEFAULT_DAILY_TARGET).toString())
     }
+    var executionIntervalInput by remember {
+        mutableStateOf(getExecutionIntervalValue(ctx).toString())
+    }
+    var executionIntervalUnit by remember {
+        mutableStateOf(getExecutionIntervalUnit(ctx))
+    }
     var autoDeleteSelection by remember { mutableStateOf(ContactManager.getAutoDeleteSetting(ctx)) }
     var clr by remember { mutableStateOf(false) }
     var simOptions by remember { mutableStateOf(SimSelection.getAvailableSimOptions(ctx)) }
@@ -908,6 +918,79 @@ fun Settings() {
                 colors = ButtonDefaults.buttonColors(containerColor = C.Green),
             ) {
                 Text("Save Daily Target", color = Color.White)
+            }
+        }
+
+        SectionCard {
+            Text("Execution Interval", color = C.Text1, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "Choose how often automation runs. The default is 8 seconds.",
+                color = C.Text2,
+                fontSize = 13.sp,
+            )
+            Spacer(Modifier.height(8.dp))
+            DetailLine("Current interval", describeExecutionInterval(ctx))
+            Spacer(Modifier.height(12.dp))
+            OutlinedTextField(
+                value = executionIntervalInput,
+                onValueChange = {
+                    if (it.all(Char::isDigit)) {
+                        executionIntervalInput = it
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Interval value", color = C.Text3) },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                textStyle = TextStyle(color = C.Text1, fontSize = 16.sp),
+                shape = RoundedCornerShape(14.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = C.Green,
+                    unfocusedBorderColor = C.Border,
+                    focusedTextColor = C.Text1,
+                    unfocusedTextColor = C.Text1,
+                ),
+            )
+            Spacer(Modifier.height(12.dp))
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                listOf(
+                    EXECUTION_INTERVAL_UNIT_SECONDS to "Seconds",
+                    EXECUTION_INTERVAL_UNIT_MINUTES to "Minutes",
+                ).forEach { (unit, label) ->
+                    FilterChip(
+                        selected = executionIntervalUnit == unit,
+                        onClick = { executionIntervalUnit = unit },
+                        label = { Text(label, fontSize = 12.sp) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = C.GreenDim,
+                            selectedLabelColor = C.Green,
+                        ),
+                    )
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            Button(
+                onClick = {
+                    val value = executionIntervalInput.toIntOrNull()?.coerceAtLeast(1) ?: DEFAULT_EXECUTION_INTERVAL_VALUE
+                    prefs.edit()
+                        .putInt(KEY_EXECUTION_INTERVAL_VALUE, value)
+                        .putString(KEY_EXECUTION_INTERVAL_UNIT, executionIntervalUnit)
+                        .apply()
+                    executionIntervalInput = value.toString()
+                    Toast.makeText(
+                        ctx,
+                        "Execution interval saved: ${formatExecutionInterval(value, executionIntervalUnit)}",
+                        Toast.LENGTH_SHORT,
+                    ).show()
+                },
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = C.Green),
+            ) {
+                Text("Save Execution Interval", color = Color.White)
             }
         }
 
@@ -1073,6 +1156,8 @@ fun Settings() {
                         ctx.getSharedPreferences(LOGS_PREFS, Context.MODE_PRIVATE).edit().clear().apply()
                         ctx.getSharedPreferences(SETTINGS_PREFS, Context.MODE_PRIVATE).edit().clear().apply()
                         dailyTargetInput = DEFAULT_DAILY_TARGET.toString()
+                        executionIntervalInput = DEFAULT_EXECUTION_INTERVAL_VALUE.toString()
+                        executionIntervalUnit = EXECUTION_INTERVAL_UNIT_SECONDS
                         autoDeleteSelection = "never"
                         simId = SimSelection.AUTO_SUBSCRIPTION_ID
                         simOptions = SimSelection.getAvailableSimOptions(ctx)

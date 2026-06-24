@@ -1,14 +1,14 @@
 plugins { id 'com.android.application'; id 'org.jetbrains.kotlin.android' }
 
-def releaseKeystorePath = System.getenv("ANDROID_KEYSTORE_PATH")
-def releaseKeystorePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
-def releaseKeyAlias = System.getenv("ANDROID_KEY_ALIAS")
-def releaseKeyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+def releaseKeystorePath = System.getenv("ONENATION_UPLOAD_KEYSTORE_PATH")
+def releaseKeystorePassword = System.getenv("ONENATION_UPLOAD_KEYSTORE_PASSWORD")
+def releaseKeyAlias = System.getenv("ONENATION_UPLOAD_KEY_ALIAS")
+def releaseKeyPassword = System.getenv("ONENATION_UPLOAD_KEY_PASSWORD")
 def hasReleaseSigning = [releaseKeystorePath, releaseKeystorePassword, releaseKeyAlias, releaseKeyPassword].every { it }
 
 android {
     namespace 'com.onenation.recommender'; compileSdk 34
-    defaultConfig { applicationId "com.onenation.recommender"; minSdk 24; targetSdk 34; versionCode 17; versionName "1.0.16" }
+    defaultConfig { applicationId "com.onenation.recommender"; minSdk 24; targetSdk 34; versionCode 18; versionName "1.0.17" }
     signingConfigs {
         release {
             if (hasReleaseSigning) {
@@ -37,8 +37,9 @@ gradle.taskGraph.whenReady { graph ->
     def isReleaseBuild = graph.allTasks.any { it.name.toLowerCase().contains("release") }
     if (isReleaseBuild && !hasReleaseSigning) {
         throw new GradleException(
-            "Release signing is required for update compatibility. Set ANDROID_KEYSTORE_PATH, " +
-                "ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, and ANDROID_KEY_PASSWORD."
+            "Release signing is required for update compatibility. Set " +
+                "ONENATION_UPLOAD_KEYSTORE_PATH, ONENATION_UPLOAD_KEYSTORE_PASSWORD, " +
+                "ONENATION_UPLOAD_KEY_ALIAS, and ONENATION_UPLOAD_KEY_PASSWORD."
         )
     }
 }

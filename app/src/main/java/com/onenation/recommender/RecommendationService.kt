@@ -23,7 +23,6 @@ class RecommendationService : Service() {
 
         private const val CHANNEL_ID = "on"
         private const val NOTIFICATION_ID = 4001
-        private const val RUN_INTERVAL_MS = 8_000L
         private const val PAUSE_POLL_MS = 2_000L
 
         var isRunning = false
@@ -363,10 +362,11 @@ class RecommendationService : Service() {
             .apply()
     }
 
-    private fun scheduleNextRun(delayMs: Long = RUN_INTERVAL_MS) {
+    private fun scheduleNextRun(delayMs: Long? = null) {
         if (!isRunning) return
+        val effectiveDelayMs = (delayMs ?: getExecutionIntervalMs(this)).coerceAtLeast(0L)
         handler.removeCallbacks(worker)
-        handler.postDelayed(worker, delayMs.coerceAtLeast(0L))
+        handler.postDelayed(worker, effectiveDelayMs)
     }
 
     private fun resolveNextDelay(): Long {
@@ -375,7 +375,7 @@ class RecommendationService : Service() {
         }
 
         val pauseRemaining = AutomationPauseManager.getRemainingPauseMs(this)
-        return maxOf(RUN_INTERVAL_MS, pauseRemaining)
+        return maxOf(getExecutionIntervalMs(this), pauseRemaining)
     }
 
     private fun sanitizeLog(value: String): String = value.replace("\n", " ").trim()

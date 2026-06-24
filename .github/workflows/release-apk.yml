@@ -14,10 +14,10 @@ jobs:
     env:
       ANDROID_HOME: /usr/local/lib/android/sdk
       ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
-      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      ONENATION_UPLOAD_KEYSTORE_BASE64: ${{ secrets.ONENATION_UPLOAD_KEYSTORE_BASE64 }}
+      ONENATION_UPLOAD_KEYSTORE_PASSWORD: ${{ secrets.ONENATION_UPLOAD_KEYSTORE_PASSWORD }}
+      ONENATION_UPLOAD_KEY_ALIAS: ${{ secrets.ONENATION_UPLOAD_KEY_ALIAS }}
+      ONENATION_UPLOAD_KEY_PASSWORD: ${{ secrets.ONENATION_UPLOAD_KEY_PASSWORD }}
 
     steps:
       - name: Check out repository
@@ -60,7 +60,7 @@ jobs:
 
       - name: Require release signing
         run: |
-          if [ -z "$ANDROID_KEYSTORE_BASE64" ] || [ -z "$ANDROID_KEYSTORE_PASSWORD" ] || [ -z "$ANDROID_KEY_ALIAS" ] || [ -z "$ANDROID_KEY_PASSWORD" ]; then
+          if [ -z "$ONENATION_UPLOAD_KEYSTORE_BASE64" ] || [ -z "$ONENATION_UPLOAD_KEYSTORE_PASSWORD" ] || [ -z "$ONENATION_UPLOAD_KEY_ALIAS" ] || [ -z "$ONENATION_UPLOAD_KEY_PASSWORD" ]; then
             echo "Android signing secrets are missing."
             echo "A release APK for updates must be signed with the same keystore as the installed app."
             exit 1
@@ -70,11 +70,11 @@ jobs:
       - name: Decode release keystore
         run: |
           KEYSTORE_PATH="$RUNNER_TEMP/release.keystore"
-          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
-          echo "ANDROID_KEYSTORE_PATH=$KEYSTORE_PATH" >> "$GITHUB_ENV"
-          echo "ANDROID_KEYSTORE_PASSWORD=$ANDROID_KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
-          echo "ANDROID_KEY_ALIAS=$ANDROID_KEY_ALIAS" >> "$GITHUB_ENV"
-          echo "ANDROID_KEY_PASSWORD=$ANDROID_KEY_PASSWORD" >> "$GITHUB_ENV"
+          echo "$ONENATION_UPLOAD_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
+          echo "ONENATION_UPLOAD_KEYSTORE_PATH=$KEYSTORE_PATH" >> "$GITHUB_ENV"
+          echo "ONENATION_UPLOAD_KEYSTORE_PASSWORD=$ONENATION_UPLOAD_KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+          echo "ONENATION_UPLOAD_KEY_ALIAS=$ONENATION_UPLOAD_KEY_ALIAS" >> "$GITHUB_ENV"
+          echo "ONENATION_UPLOAD_KEY_PASSWORD=$ONENATION_UPLOAD_KEY_PASSWORD" >> "$GITHUB_ENV"
 
       - name: Build release APK
         run: gradle assembleRelease
