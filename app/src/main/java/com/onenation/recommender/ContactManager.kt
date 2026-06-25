@@ -394,7 +394,7 @@ object ContactManager {
     }
 
     private fun hashPair(input: String): Pair<Long, Long> {
-        return fnv1a64(input, 0xcbf29ce484222325L) to fnv1a64(input, 0xaf63dc4c8601ec8cL)
+        return fnv1a64(input, 0xcbf29ce484222325uL.toLong()) to fnv1a64(input, 0xaf63dc4c8601ec8cuL.toLong())
     }
 
     private fun fnv1a64(input: String, seed: Long): Long {
