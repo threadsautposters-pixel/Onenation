@@ -4,13 +4,11 @@ import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.database.Cursor
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.VibrationEffect
 import android.os.Vibrator
-import android.provider.ContactsContract
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -63,6 +61,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -73,6 +72,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -268,6 +268,7 @@ fun AppTopTabs(
 fun Dash() {
     val ctx = LocalContext.current
     val prefs = ctx.getSharedPreferences(SETTINGS_PREFS, Context.MODE_PRIVATE)
+    val importState by ContactImportManager.state.collectAsState()
     var run by remember { mutableStateOf(RecommendationService.isRunning) }
     var sc by remember { mutableIntStateOf(RecommendationService.successCount) }
     var ta by remember { mutableIntStateOf(RecommendationService.totalAttempts) }
@@ -374,6 +375,33 @@ fun Dash() {
             ) {
                 importContacts(ctx)
                 refreshState()
+            }
+        }
+
+        if (importState.isRunning || importState.message.isNotBlank()) {
+            SectionTitle("Contact Import", "Progress and de-duplication summary")
+            SectionCard {
+                val total = importState.total.coerceAtLeast(0)
+                val processed = importState.processed.coerceAtLeast(0)
+                val progress = if (total > 0) (processed.toFloat() / total.toFloat()).coerceIn(0f, 1f) else 0f
+                val percent = if (total > 0) ((processed.toFloat() * 100f) / total.toFloat()).coerceIn(0f, 100f) else 0f
+
+                Text("Import status", color = C.Text1, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                Spacer(Modifier.height(6.dp))
+                Text(importState.message.ifBlank { "Ready" }, color = C.Text2, fontSize = 13.sp)
+                Spacer(Modifier.height(10.dp))
+                LinearProgressIndicator(
+                    progress = progress,
+                    modifier = Modifier.fillMaxWidth(),
+                    color = C.Blue,
+                    trackColor = Color.White.copy(alpha = 0.10f),
+                )
+                Spacer(Modifier.height(10.dp))
+                DetailLine("Processed", if (total > 0) "$processed / $total" else "$processed")
+                DetailLine("Progress", "%.0f%%".format(percent))
+                DetailLine("Added", "${importState.added}")
+                DetailLine("Duplicates skipped", "${importState.skippedDuplicate}")
+                DetailLine("Invalid skipped", "${importState.skippedInvalid}")
             }
         }
 
@@ -1436,45 +1464,13 @@ fun importContacts(ctx: Context) {
         return
     }
 
-    var count = 0
-    val date = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date())
-    val time = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
-    val cursor: Cursor? = ctx.contentResolver.query(
-        ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
-        null,
-        null,
-        null,
-        null,
-    )
-
-    cursor?.use {
-        val numberColumn = it.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
-        while (it.moveToNext()) {
-            val cleaned = it.getString(numberColumn)
-                .replace(Regex("[^0-9+]"), "")
-                .replace("+254", "0")
-                .trim()
-
-            if (cleaned.matches(Regex("^0[17]\\d{8}$")) &&
-                !ContactManager.isPending(ctx, cleaned) &&
-                !ContactManager.isInstalled(ctx, cleaned)
-            ) {
-                ContactManager.saveNumber(
-                    ctx,
-                    SavedNumber(
-                        phone = cleaned,
-                        dateAdded = date,
-                        timeAdded = time,
-                        status = "IMPORTED_PENDING",
-                        source = "IMPORTED_CONTACTS",
-                    ),
-                )
-                count++
-            }
-        }
+    if (ContactImportManager.state.value.isRunning) {
+        Toast.makeText(ctx, "Import already running", Toast.LENGTH_SHORT).show()
+        return
     }
 
-    Toast.makeText(ctx, "Imported $count numbers", Toast.LENGTH_SHORT).show()
+    ContactImportManager.start(ctx)
+    Toast.makeText(ctx, "Import started", Toast.LENGTH_SHORT).show()
 }
 
 fun vibrate(ctx: Context) {

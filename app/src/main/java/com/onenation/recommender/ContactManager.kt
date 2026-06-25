@@ -22,6 +22,11 @@ data class SavedNumber(
     var nextRetryTime: String = "",
 )
 
+data class ContactImportBatchResult(
+    val added: Int,
+    val skippedDuplicate: Int,
+)
+
 object ContactManager {
     private const val P = "onenation_data"
     private const val KEY_GENERATED_COUNT = "gen"
@@ -56,6 +61,48 @@ object ContactManager {
         pending.add(number)
         savePending(context, pending)
         incrementLifetimeTotal(context)
+    }
+
+    fun addImportedContactsBatch(
+        context: Context,
+        phones: Set<String>,
+        date: String,
+        time: String,
+    ): ContactImportBatchResult {
+        if (phones.isEmpty()) return ContactImportBatchResult(added = 0, skippedDuplicate = 0)
+
+        val pending = getPending(context).toMutableList()
+        val pendingSet = pending.map { it.phone }.toHashSet()
+        val installedSet = getInstalled(context).map { it.phone }.toHashSet()
+
+        var added = 0
+        var skipped = 0
+
+        phones.forEach { phone ->
+            if (pendingSet.contains(phone) || installedSet.contains(phone)) {
+                skipped++
+                return@forEach
+            }
+
+            pending.add(
+                SavedNumber(
+                    phone = phone,
+                    dateAdded = date,
+                    timeAdded = time,
+                    status = "IMPORTED_PENDING",
+                    source = "IMPORTED_CONTACTS",
+                ),
+            )
+            pendingSet.add(phone)
+            added++
+        }
+
+        if (added > 0) {
+            savePending(context, pending)
+            incrementLifetimeTotalBy(context, added.toLong())
+        }
+
+        return ContactImportBatchResult(added = added, skippedDuplicate = skipped)
     }
 
     fun wasGeneratedBefore(context: Context, phone: String): Boolean {
@@ -229,6 +276,12 @@ object ContactManager {
     private fun incrementLifetimeTotal(context: Context) {
         val prefs = context.getSharedPreferences(P, Context.MODE_PRIVATE)
         prefs.edit().putLong(KEY_LIFETIME_TOTAL, getLifetimeTotal(context) + 1).apply()
+    }
+
+    private fun incrementLifetimeTotalBy(context: Context, delta: Long) {
+        if (delta <= 0L) return
+        val prefs = context.getSharedPreferences(P, Context.MODE_PRIVATE)
+        prefs.edit().putLong(KEY_LIFETIME_TOTAL, getLifetimeTotal(context) + delta).apply()
     }
 
     private fun incrementLifetimeSuccess(context: Context) {
