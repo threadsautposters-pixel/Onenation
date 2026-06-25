@@ -168,11 +168,13 @@ class RecommendationService : Service() {
             generated = NumberGenerator.generate()
         } while (
             generatedNumbers.contains(generated) ||
+            ContactManager.wasGeneratedBefore(this, generated) ||
             ContactManager.isPending(this, generated) ||
             ContactManager.isInstalled(this, generated)
         )
 
         generatedNumbers.add(generated)
+        ContactManager.markGenerated(this, generated)
         ContactManager.incrementGeneratedCount(this)
         return generated
     }
