@@ -996,14 +996,6 @@ fun Settings() {
     var simId by remember { mutableIntStateOf(SimSelection.getStoredSubscriptionId(ctx)) }
     var restoreUris by remember { mutableStateOf<List<Uri>>(emptyList()) }
     var exportType by remember { mutableStateOf("") }
-    var circuitEnabled by remember { mutableStateOf(prefs.getBoolean(KEY_FAIL_CIRCUIT_ENABLED, DEFAULT_FAIL_CIRCUIT_ENABLED)) }
-    var circuitMaxFailsInput by remember {
-        mutableStateOf(prefs.getInt(KEY_FAIL_CIRCUIT_MAX_FAILS, DEFAULT_FAIL_CIRCUIT_MAX_FAILS).toString())
-    }
-    var circuitPauseMinutesInput by remember {
-        mutableStateOf(prefs.getInt(KEY_FAIL_CIRCUIT_PAUSE_MINUTES, DEFAULT_FAIL_CIRCUIT_PAUSE_MINUTES).toString())
-    }
-
     val downloadBackupLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
             if (uri == null) return@rememberLauncherForActivityResult
@@ -1450,91 +1442,6 @@ fun Settings() {
                 }
             }
 
-            Spacer(Modifier.height(14.dp))
-            Text("Circuit Breaker", color = C.Text1, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
-            Spacer(Modifier.height(6.dp))
-            Text(
-                "If many failures happen in a row, automation will auto-pause to protect your line.",
-                color = C.Text2,
-                fontSize = 12.sp,
-            )
-            Spacer(Modifier.height(10.dp))
-            Row(
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                FilterChip(
-                    selected = circuitEnabled,
-                    onClick = { circuitEnabled = true },
-                    label = { Text("Enabled", fontSize = 12.sp) },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = C.GreenDim,
-                        selectedLabelColor = C.Green,
-                    ),
-                )
-                FilterChip(
-                    selected = !circuitEnabled,
-                    onClick = { circuitEnabled = false },
-                    label = { Text("Disabled", fontSize = 12.sp) },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = C.RedDim,
-                        selectedLabelColor = C.Red,
-                    ),
-                )
-            }
-            Spacer(Modifier.height(10.dp))
-            OutlinedTextField(
-                value = circuitMaxFailsInput,
-                onValueChange = { if (it.all(Char::isDigit)) circuitMaxFailsInput = it },
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text("Max consecutive failures", color = C.Text3) },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                textStyle = TextStyle(color = C.Text1, fontSize = 16.sp),
-                shape = RoundedCornerShape(14.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = C.Green,
-                    unfocusedBorderColor = C.Border,
-                    focusedTextColor = C.Text1,
-                    unfocusedTextColor = C.Text1,
-                ),
-            )
-            Spacer(Modifier.height(10.dp))
-            OutlinedTextField(
-                value = circuitPauseMinutesInput,
-                onValueChange = { if (it.all(Char::isDigit)) circuitPauseMinutesInput = it },
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text("Auto-pause minutes", color = C.Text3) },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                textStyle = TextStyle(color = C.Text1, fontSize = 16.sp),
-                shape = RoundedCornerShape(14.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = C.Green,
-                    unfocusedBorderColor = C.Border,
-                    focusedTextColor = C.Text1,
-                    unfocusedTextColor = C.Text1,
-                ),
-            )
-            Spacer(Modifier.height(10.dp))
-            Button(
-                onClick = {
-                    val maxFails = circuitMaxFailsInput.toIntOrNull()?.coerceAtLeast(1) ?: DEFAULT_FAIL_CIRCUIT_MAX_FAILS
-                    val pauseMin = circuitPauseMinutesInput.toIntOrNull()?.coerceAtLeast(1) ?: DEFAULT_FAIL_CIRCUIT_PAUSE_MINUTES
-                    prefs.edit()
-                        .putBoolean(KEY_FAIL_CIRCUIT_ENABLED, circuitEnabled)
-                        .putInt(KEY_FAIL_CIRCUIT_MAX_FAILS, maxFails)
-                        .putInt(KEY_FAIL_CIRCUIT_PAUSE_MINUTES, pauseMin)
-                        .apply()
-                    circuitMaxFailsInput = maxFails.toString()
-                    circuitPauseMinutesInput = pauseMin.toString()
-                    Toast.makeText(ctx, "Circuit breaker saved", Toast.LENGTH_SHORT).show()
-                },
-                shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = C.Green),
-            ) {
-                Text("Save Circuit Breaker", color = Color.White)
-            }
         }
 
         SectionCard {
@@ -1745,7 +1652,11 @@ fun appVersionName(ctx: Context): String {
 
 fun saveLog(ctx: Context, entry: String) {
     val prefs = ctx.getSharedPreferences(LOGS_PREFS, Context.MODE_PRIVATE)
-    val logs = JSONArray(prefs.getString("logs", "[]") ?: "[]")
+    val logs = runCatching {
+        JSONArray(prefs.getString("logs", "[]") ?: "[]")
+    }.getOrElse {
+        JSONArray()
+    }
     logs.put(entry)
     while (logs.length() > 500) {
         logs.remove(0)
@@ -1754,15 +1665,17 @@ fun saveLog(ctx: Context, entry: String) {
 }
 
 fun loadLogs(ctx: Context): List<String> {
-    val logs = JSONArray(
-        ctx.getSharedPreferences(LOGS_PREFS, Context.MODE_PRIVATE)
-            .getString("logs", "[]") ?: "[]",
-    )
-    val result = mutableListOf<String>()
-    for (index in 0 until logs.length()) {
-        result.add(logs.getString(index))
-    }
-    return result.reversed()
+    return runCatching {
+        val logs = JSONArray(
+            ctx.getSharedPreferences(LOGS_PREFS, Context.MODE_PRIVATE)
+                .getString("logs", "[]") ?: "[]",
+        )
+        buildList {
+            for (index in 0 until logs.length()) {
+                add(logs.optString(index))
+            }
+        }.reversed()
+    }.getOrDefault(emptyList())
 }
 
 fun formatCommission(value: Double): String {

@@ -9,7 +9,7 @@ def isCi = (System.getenv("CI") ?: "false").toBoolean()
 
 android {
     namespace 'com.onenation.recommender'; compileSdk 34
-    defaultConfig { applicationId "com.onenation.recommender"; minSdk 24; targetSdk 34; versionCode 34; versionName "1.0.33" }
+    defaultConfig { applicationId "com.onenation.recommender"; minSdk 24; targetSdk 34; versionCode 35; versionName "1.0.34" }
     signingConfigs {
         release {
             initWith signingConfigs.debug
