@@ -25,6 +25,7 @@ class RecommendationService : Service() {
         private const val NOTIFICATION_ID = 4001
         private const val PAUSE_POLL_MS = 2_000L
         private const val USSD_EXECUTION_TIMEOUT_MS = 30_000L
+        private const val MAX_GENERATION_ATTEMPTS = 5_000
 
         var isRunning = false
         var successCount = 0
@@ -40,7 +41,6 @@ class RecommendationService : Service() {
     private var today = 0
     private var isProcessing = false
     private val generatedNumbers = mutableSetOf<String>()
-    private var consecutiveFailures = 0
 
     private sealed interface QueueDecision {
         data class Process(val phone: String) : QueueDecision
@@ -86,14 +86,25 @@ class RecommendationService : Service() {
                 return
             }
 
-            when (val decision = pickNextPhone()) {
-                is QueueDecision.Process -> processPhone(decision.phone)
-                is QueueDecision.Wait -> {
-                    lastLog = decision.reason
-                    updateNotification()
-                    onUpdate?.invoke()
-                    scheduleNextRun(decision.delayMs)
+            try {
+                when (val decision = pickNextPhone()) {
+                    is QueueDecision.Process -> processPhone(decision.phone)
+                    is QueueDecision.Wait -> {
+                        lastLog = decision.reason
+                        updateNotification()
+                        onUpdate?.invoke()
+                        scheduleNextRun(decision.delayMs)
+                    }
                 }
+            } catch (e: Exception) {
+                lastLog = "Retrying after generation error"
+                saveLog(
+                    this@RecommendationService,
+                    "[ERROR] Queue selection failed: ${e.javaClass.simpleName}: ${e.message.orEmpty()}",
+                )
+                updateNotification()
+                onUpdate?.invoke()
+                scheduleNextRun(PAUSE_POLL_MS)
             }
         }
     }
@@ -122,6 +133,7 @@ class RecommendationService : Service() {
 
         return try {
             persistBackgroundState(true)
+            handler.removeCallbacksAndMessages(null)
             isRunning = true
             today = 0
             successCount = 0
@@ -129,7 +141,6 @@ class RecommendationService : Service() {
             failedCount = 0
             installedCount = 0
             generatedNumbers.clear()
-            consecutiveFailures = 0
             lastLog = "Started on ${SimSelection.getSelectedSimLabel(this)}"
             onUpdate?.invoke()
             startForeground(NOTIFICATION_ID, buildNotification())
@@ -166,7 +177,11 @@ class RecommendationService : Service() {
 
     private fun generateNewPhone(): String {
         var generated: String
+        var attempts = 0
         do {
+            if (attempts++ >= MAX_GENERATION_ATTEMPTS) {
+                throw IllegalStateException("Unable to find a unique phone number")
+            }
             generated = NumberGenerator.generate()
         } while (
             generatedNumbers.contains(generated) ||
@@ -216,26 +231,10 @@ class RecommendationService : Service() {
 
         fun terminateCurrentNumber(reason: String, detail: String) {
             failedCount++
-            consecutiveFailures++
             ContactManager.terminateNumber(this, phone)
             lastLog = reason
             saveLog(this, "[$now $time] FAILED [$simLabel]: $phone")
             saveLog(this, "[$now $time] TERMINATED [$simLabel]: $phone (${sanitizeLog(detail)})")
-
-            val prefs = getSharedPreferences(SETTINGS_PREFS, Context.MODE_PRIVATE)
-            val enabled = prefs.getBoolean(KEY_FAIL_CIRCUIT_ENABLED, DEFAULT_FAIL_CIRCUIT_ENABLED)
-            val maxFails = prefs.getInt(KEY_FAIL_CIRCUIT_MAX_FAILS, DEFAULT_FAIL_CIRCUIT_MAX_FAILS).coerceAtLeast(1)
-            val pauseMinutes = prefs.getInt(KEY_FAIL_CIRCUIT_PAUSE_MINUTES, DEFAULT_FAIL_CIRCUIT_PAUSE_MINUTES).coerceAtLeast(1)
-            if (enabled && consecutiveFailures >= maxFails) {
-                val pauseMs = pauseMinutes.toLong() * 60_000L
-                AutomationPauseManager.pause(this@RecommendationService, pauseMs)
-                lastLog = "Auto-paused after $consecutiveFailures fails"
-                saveLog(
-                    this@RecommendationService,
-                    "[$now $time] [INFO] Circuit breaker paused automation for ${pauseMinutes}m after $consecutiveFailures failures",
-                )
-                consecutiveFailures = 0
-            }
         }
 
         timeoutRunnable = Runnable {
@@ -264,7 +263,6 @@ class RecommendationService : Service() {
                         when (ResponseParser.parse(response)) {
                             RecommendationResult.SUBMITTED -> {
                                 successCount++
-                                consecutiveFailures = 0
                                 lastLog = "Success on $phone"
                                 if (!ContactManager.isPending(this, phone)) {
                                     ContactManager.saveNumber(
@@ -284,7 +282,6 @@ class RecommendationService : Service() {
 
                             RecommendationResult.ALREADY_RECOMMENDED -> {
                                 installedCount++
-                                consecutiveFailures = 0
                                 lastLog = "Already recommended: $phone"
                                 if (!ContactManager.isPending(this, phone) && !ContactManager.isInstalled(this, phone)) {
                                     ContactManager.saveNumber(
@@ -304,7 +301,6 @@ class RecommendationService : Service() {
 
                             RecommendationResult.ALREADY_INSTALLED -> {
                                 installedCount++
-                                consecutiveFailures = 0
                                 lastLog = "Already installed: $phone"
                                 if (!ContactManager.isPending(this, phone) && !ContactManager.isInstalled(this, phone)) {
                                     ContactManager.saveNumber(
@@ -364,7 +360,7 @@ class RecommendationService : Service() {
     private fun stopServiceSafely() {
         isRunning = false
         isProcessing = false
-        handler.removeCallbacks(worker)
+        handler.removeCallbacksAndMessages(null)
         lastLog = "Stopped"
         onUpdate?.invoke()
         stopForeground(STOP_FOREGROUND_REMOVE)
@@ -374,7 +370,7 @@ class RecommendationService : Service() {
     override fun onDestroy() {
         isRunning = false
         isProcessing = false
-        handler.removeCallbacks(worker)
+        handler.removeCallbacksAndMessages(null)
         super.onDestroy()
     }
 

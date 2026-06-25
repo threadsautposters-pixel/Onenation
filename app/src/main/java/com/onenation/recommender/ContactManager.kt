@@ -50,7 +50,10 @@ object ContactManager {
         var count: Long,
     )
 
+    private val cacheLock = Any()
     private var bloomCache: MutableList<BloomLayer>? = null
+    private var pendingCache: List<SavedNumber>? = null
+    private var installedCache: List<SavedNumber>? = null
 
     fun saveNumber(context: Context, number: SavedNumber) {
         if (isInstalled(context, number.phone)) return
@@ -202,15 +205,19 @@ object ContactManager {
         return (nextRetryAt - now).coerceAtLeast(0L)
     }
 
-    fun getPending(context: Context): List<SavedNumber> = parse(
-        context.getSharedPreferences(P, Context.MODE_PRIVATE),
-        KEY_PENDING,
-    )
+    fun getPending(context: Context): List<SavedNumber> = synchronized(cacheLock) {
+        pendingCache ?: parse(
+            context.getSharedPreferences(P, Context.MODE_PRIVATE),
+            KEY_PENDING,
+        ).also { pendingCache = it }
+    }
 
-    fun getInstalled(context: Context): List<SavedNumber> = parse(
-        context.getSharedPreferences(P, Context.MODE_PRIVATE),
-        KEY_INSTALLED,
-    )
+    fun getInstalled(context: Context): List<SavedNumber> = synchronized(cacheLock) {
+        installedCache ?: parse(
+            context.getSharedPreferences(P, Context.MODE_PRIVATE),
+            KEY_INSTALLED,
+        ).also { installedCache = it }
+    }
 
     fun replaceAll(context: Context, pending: List<SavedNumber>, installed: List<SavedNumber>) {
         savePending(context, pending)
@@ -324,10 +331,16 @@ object ContactManager {
     }
 
     private fun savePending(context: Context, numbers: List<SavedNumber>) {
+        synchronized(cacheLock) {
+            pendingCache = numbers.toList()
+        }
         save(context, KEY_PENDING, numbers)
     }
 
     private fun saveInstalled(context: Context, numbers: List<SavedNumber>) {
+        synchronized(cacheLock) {
+            installedCache = numbers.toList()
+        }
         save(context, KEY_INSTALLED, numbers)
     }
 

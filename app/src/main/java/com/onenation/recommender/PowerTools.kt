@@ -63,9 +63,7 @@ object PowerTools {
             appendLine("Interval: $interval")
             appendLine("KeepRunning: $keepRunning")
             appendLine("PausedRemainingMs: $pausedMs")
-            appendLine("CircuitBreakerEnabled: ${prefs.getBoolean(KEY_FAIL_CIRCUIT_ENABLED, DEFAULT_FAIL_CIRCUIT_ENABLED)}")
-            appendLine("CircuitBreakerMaxFails: ${prefs.getInt(KEY_FAIL_CIRCUIT_MAX_FAILS, DEFAULT_FAIL_CIRCUIT_MAX_FAILS)}")
-            appendLine("CircuitBreakerPauseMinutes: ${prefs.getInt(KEY_FAIL_CIRCUIT_PAUSE_MINUTES, DEFAULT_FAIL_CIRCUIT_PAUSE_MINUTES)}")
+            appendLine("PauseMode: Calls and M-Pesa SMS only")
             appendLine()
             appendLine("STATS")
             appendLine("Pending: $pending")
@@ -178,4 +176,3 @@ object PowerTools {
         )
     }
 }
-
