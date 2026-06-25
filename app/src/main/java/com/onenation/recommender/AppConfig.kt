@@ -13,12 +13,18 @@ const val KEY_AUTOMATION_PAUSED_UNTIL = "automation_paused_until"
 const val KEY_CALL_IN_PROGRESS = "call_in_progress"
 const val KEY_EXECUTION_INTERVAL_VALUE = "execution_interval_value"
 const val KEY_EXECUTION_INTERVAL_UNIT = "execution_interval_unit"
+const val KEY_FAIL_CIRCUIT_ENABLED = "fail_circuit_enabled"
+const val KEY_FAIL_CIRCUIT_MAX_FAILS = "fail_circuit_max_fails"
+const val KEY_FAIL_CIRCUIT_PAUSE_MINUTES = "fail_circuit_pause_minutes"
 
 const val DEFAULT_DAILY_TARGET = 7000
 const val DEFAULT_EXECUTION_INTERVAL_VALUE = 8
 const val EXECUTION_INTERVAL_UNIT_SECONDS = "seconds"
 const val EXECUTION_INTERVAL_UNIT_MINUTES = "minutes"
 const val MPESA_PAUSE_MS = 2 * 60 * 1000L
+const val DEFAULT_FAIL_CIRCUIT_ENABLED = true
+const val DEFAULT_FAIL_CIRCUIT_MAX_FAILS = 10
+const val DEFAULT_FAIL_CIRCUIT_PAUSE_MINUTES = 30
 
 fun getExecutionIntervalValue(ctx: Context): Int {
     return ctx.getSharedPreferences(SETTINGS_PREFS, Context.MODE_PRIVATE)

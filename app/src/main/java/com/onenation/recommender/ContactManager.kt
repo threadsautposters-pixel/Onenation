@@ -212,6 +212,11 @@ object ContactManager {
         KEY_INSTALLED,
     )
 
+    fun replaceAll(context: Context, pending: List<SavedNumber>, installed: List<SavedNumber>) {
+        savePending(context, pending)
+        saveInstalled(context, installed)
+    }
+
     fun getPendingCount(context: Context): Int = getPending(context).size
 
     fun getInstalledCount(context: Context): Int = getInstalled(context).size

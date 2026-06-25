@@ -995,6 +995,14 @@ fun Settings() {
     var simOptions by remember { mutableStateOf(SimSelection.getAvailableSimOptions(ctx)) }
     var simId by remember { mutableIntStateOf(SimSelection.getStoredSubscriptionId(ctx)) }
     var restoreUris by remember { mutableStateOf<List<Uri>>(emptyList()) }
+    var exportType by remember { mutableStateOf("") }
+    var circuitEnabled by remember { mutableStateOf(prefs.getBoolean(KEY_FAIL_CIRCUIT_ENABLED, DEFAULT_FAIL_CIRCUIT_ENABLED)) }
+    var circuitMaxFailsInput by remember {
+        mutableStateOf(prefs.getInt(KEY_FAIL_CIRCUIT_MAX_FAILS, DEFAULT_FAIL_CIRCUIT_MAX_FAILS).toString())
+    }
+    var circuitPauseMinutesInput by remember {
+        mutableStateOf(prefs.getInt(KEY_FAIL_CIRCUIT_PAUSE_MINUTES, DEFAULT_FAIL_CIRCUIT_PAUSE_MINUTES).toString())
+    }
 
     val downloadBackupLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
@@ -1017,6 +1025,31 @@ fun Settings() {
         rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
             if (uris.isEmpty()) return@rememberLauncherForActivityResult
             restoreUris = uris
+        }
+
+    val exportTextLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
+            if (uri == null || exportType.isBlank()) return@rememberLauncherForActivityResult
+            val type = exportType
+            exportType = ""
+            scope.launch {
+                val result = runCatching {
+                    withContext(Dispatchers.IO) {
+                        val content = when (type) {
+                            "DIAG" -> PowerTools.generateDiagnosticsReport(ctx)
+                            "PENDING_CSV" -> PowerTools.exportPendingCsv(ctx)
+                            "INSTALLED_CSV" -> PowerTools.exportInstalledCsv(ctx)
+                            else -> ""
+                        }
+                        PowerTools.writeTextFile(ctx, uri, content)
+                    }
+                }
+                Toast.makeText(
+                    ctx,
+                    if (result.isSuccess) "File saved" else "Save failed: ${result.exceptionOrNull()?.message.orEmpty()}",
+                    Toast.LENGTH_LONG,
+                ).show()
+            }
         }
 
     Column(
@@ -1305,6 +1338,202 @@ fun Settings() {
                     Text("Clear All Data", color = C.Text1, fontWeight = FontWeight.SemiBold)
                     Text("Remove stored numbers, logs and settings", color = C.Text2, fontSize = 12.sp)
                 }
+            }
+        }
+
+        SectionCard {
+            Text("Power Tools", color = C.Text1, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+            Spacer(Modifier.height(10.dp))
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .clickable {
+                        val stamp = SimpleDateFormat("yyyyMMdd-HHmm", Locale.getDefault()).format(Date())
+                        exportType = "DIAG"
+                        exportTextLauncher.launch("OneNation-Diagnostics-$stamp.txt")
+                    }
+                    .background(C.BlueDim)
+                    .padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Outlined.ListAlt, contentDescription = null, tint = C.Blue)
+                Spacer(Modifier.width(10.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Export Diagnostics Report", color = C.Text1, fontWeight = FontWeight.SemiBold)
+                    Text("Generate a troubleshooting report file", color = C.Text2, fontSize = 12.sp)
+                }
+            }
+
+            Spacer(Modifier.height(10.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .clickable {
+                        val stamp = SimpleDateFormat("yyyyMMdd-HHmm", Locale.getDefault()).format(Date())
+                        exportType = "PENDING_CSV"
+                        exportTextLauncher.launch("OneNation-Pending-$stamp.csv")
+                    }
+                    .background(C.BlueDim)
+                    .padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Outlined.FileDownload, contentDescription = null, tint = C.Blue)
+                Spacer(Modifier.width(10.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Export Saved (Pending) CSV", color = C.Text1, fontWeight = FontWeight.SemiBold)
+                    Text("Download your saved retry queue as CSV", color = C.Text2, fontSize = 12.sp)
+                }
+            }
+
+            Spacer(Modifier.height(10.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .clickable {
+                        val stamp = SimpleDateFormat("yyyyMMdd-HHmm", Locale.getDefault()).format(Date())
+                        exportType = "INSTALLED_CSV"
+                        exportTextLauncher.launch("OneNation-Installed-$stamp.csv")
+                    }
+                    .background(C.BlueDim)
+                    .padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Outlined.FileDownload, contentDescription = null, tint = C.Blue)
+                Spacer(Modifier.width(10.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Export Installed CSV", color = C.Text1, fontWeight = FontWeight.SemiBold)
+                    Text("Download confirmed installs list as CSV", color = C.Text2, fontSize = 12.sp)
+                }
+            }
+
+            Spacer(Modifier.height(10.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .clickable {
+                        scope.launch {
+                            val result = runCatching {
+                                withContext(Dispatchers.IO) {
+                                    PowerTools.cleanAndDedup(ctx)
+                                }
+                            }
+                            if (result.isSuccess) {
+                                val r = result.getOrNull()!!
+                                Toast.makeText(
+                                    ctx,
+                                    "Cleanup done. Pending ${r.pendingBefore}→${r.pendingAfter}, Installed ${r.installedBefore}→${r.installedAfter}",
+                                    Toast.LENGTH_LONG,
+                                ).show()
+                            } else {
+                                Toast.makeText(
+                                    ctx,
+                                    "Cleanup failed: ${result.exceptionOrNull()?.message.orEmpty()}",
+                                    Toast.LENGTH_LONG,
+                                ).show()
+                            }
+                        }
+                    }
+                    .background(C.OrangeDim)
+                    .padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Outlined.Delete, contentDescription = null, tint = C.Orange)
+                Spacer(Modifier.width(10.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Optimize & De-duplicate Data", color = C.Text1, fontWeight = FontWeight.SemiBold)
+                    Text("Removes invalid numbers and duplicates safely", color = C.Text2, fontSize = 12.sp)
+                }
+            }
+
+            Spacer(Modifier.height(14.dp))
+            Text("Circuit Breaker", color = C.Text1, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "If many failures happen in a row, automation will auto-pause to protect your line.",
+                color = C.Text2,
+                fontSize = 12.sp,
+            )
+            Spacer(Modifier.height(10.dp))
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                FilterChip(
+                    selected = circuitEnabled,
+                    onClick = { circuitEnabled = true },
+                    label = { Text("Enabled", fontSize = 12.sp) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = C.GreenDim,
+                        selectedLabelColor = C.Green,
+                    ),
+                )
+                FilterChip(
+                    selected = !circuitEnabled,
+                    onClick = { circuitEnabled = false },
+                    label = { Text("Disabled", fontSize = 12.sp) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = C.RedDim,
+                        selectedLabelColor = C.Red,
+                    ),
+                )
+            }
+            Spacer(Modifier.height(10.dp))
+            OutlinedTextField(
+                value = circuitMaxFailsInput,
+                onValueChange = { if (it.all(Char::isDigit)) circuitMaxFailsInput = it },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Max consecutive failures", color = C.Text3) },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                textStyle = TextStyle(color = C.Text1, fontSize = 16.sp),
+                shape = RoundedCornerShape(14.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = C.Green,
+                    unfocusedBorderColor = C.Border,
+                    focusedTextColor = C.Text1,
+                    unfocusedTextColor = C.Text1,
+                ),
+            )
+            Spacer(Modifier.height(10.dp))
+            OutlinedTextField(
+                value = circuitPauseMinutesInput,
+                onValueChange = { if (it.all(Char::isDigit)) circuitPauseMinutesInput = it },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Auto-pause minutes", color = C.Text3) },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                textStyle = TextStyle(color = C.Text1, fontSize = 16.sp),
+                shape = RoundedCornerShape(14.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = C.Green,
+                    unfocusedBorderColor = C.Border,
+                    focusedTextColor = C.Text1,
+                    unfocusedTextColor = C.Text1,
+                ),
+            )
+            Spacer(Modifier.height(10.dp))
+            Button(
+                onClick = {
+                    val maxFails = circuitMaxFailsInput.toIntOrNull()?.coerceAtLeast(1) ?: DEFAULT_FAIL_CIRCUIT_MAX_FAILS
+                    val pauseMin = circuitPauseMinutesInput.toIntOrNull()?.coerceAtLeast(1) ?: DEFAULT_FAIL_CIRCUIT_PAUSE_MINUTES
+                    prefs.edit()
+                        .putBoolean(KEY_FAIL_CIRCUIT_ENABLED, circuitEnabled)
+                        .putInt(KEY_FAIL_CIRCUIT_MAX_FAILS, maxFails)
+                        .putInt(KEY_FAIL_CIRCUIT_PAUSE_MINUTES, pauseMin)
+                        .apply()
+                    circuitMaxFailsInput = maxFails.toString()
+                    circuitPauseMinutesInput = pauseMin.toString()
+                    Toast.makeText(ctx, "Circuit breaker saved", Toast.LENGTH_SHORT).show()
+                },
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = C.Green),
+            ) {
+                Text("Save Circuit Breaker", color = Color.White)
             }
         }
 

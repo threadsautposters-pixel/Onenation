@@ -3,7 +3,7 @@ package com.onenation.recommender
 import android.content.Context
 
 object AutomationPauseManager {
-    fun pauseForMpesa(context: Context, durationMs: Long = MPESA_PAUSE_MS): Long {
+    fun pause(context: Context, durationMs: Long): Long {
         val prefs = context.getSharedPreferences(SETTINGS_PREFS, Context.MODE_PRIVATE)
         val now = System.currentTimeMillis()
         val currentPauseUntil = prefs.getLong(KEY_AUTOMATION_PAUSED_UNTIL, 0L)
@@ -14,6 +14,10 @@ object AutomationPauseManager {
             .apply()
 
         return pauseUntil
+    }
+
+    fun pauseForMpesa(context: Context, durationMs: Long = MPESA_PAUSE_MS): Long {
+        return pause(context, durationMs)
     }
 
     fun getRemainingPauseMs(context: Context): Long {
