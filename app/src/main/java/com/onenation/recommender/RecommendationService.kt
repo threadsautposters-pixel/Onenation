@@ -51,49 +51,61 @@ class RecommendationService : Service() {
     private val worker = object : Runnable {
         override fun run() {
             if (!isRunning) return
+            try {
+                target = getSharedPreferences(SETTINGS_PREFS, Context.MODE_PRIVATE)
+                    .getInt(KEY_DAILY_TARGET, DEFAULT_DAILY_TARGET)
 
-            target = getSharedPreferences(SETTINGS_PREFS, Context.MODE_PRIVATE)
-                .getInt(KEY_DAILY_TARGET, DEFAULT_DAILY_TARGET)
+                if (today >= target) {
+                    lastLog = "Daily target reached"
+                    saveLog(this@RecommendationService, "[INFO] Daily target reached: $target")
+                    updateNotification()
+                    onUpdate?.invoke()
+                    stopServiceSafely()
+                    return
+                }
 
-            if (today >= target) {
-                lastLog = "Daily target reached"
-                saveLog(this@RecommendationService, "[INFO] Daily target reached: $target")
-                updateNotification()
-                onUpdate?.invoke()
-                stopServiceSafely()
-                return
-            }
+                if (isProcessing) {
+                    scheduleNextRun()
+                    return
+                }
 
-            if (isProcessing) {
-                scheduleNextRun()
-                return
-            }
+                val pauseRemaining = AutomationPauseManager.getRemainingPauseMs(this@RecommendationService)
+                if (pauseRemaining > 0L) {
+                    lastLog = "Paused for ${AutomationPauseManager.describeRemaining(pauseRemaining)}"
+                    updateNotification()
+                    onUpdate?.invoke()
+                    scheduleNextRun(pauseRemaining)
+                    return
+                }
 
-            val pauseRemaining = AutomationPauseManager.getRemainingPauseMs(this@RecommendationService)
-            if (pauseRemaining > 0L) {
-                lastLog = "Paused for ${AutomationPauseManager.describeRemaining(pauseRemaining)}"
-                updateNotification()
-                onUpdate?.invoke()
-                scheduleNextRun(pauseRemaining)
-                return
-            }
+                if (CallStateManager.isCallInProgress(this@RecommendationService)) {
+                    lastLog = "Paused while call is active"
+                    updateNotification()
+                    onUpdate?.invoke()
+                    scheduleNextRun(PAUSE_POLL_MS)
+                    return
+                }
 
-            if (CallStateManager.isCallInProgress(this@RecommendationService)) {
-                lastLog = "Paused while call is active"
+                when (val decision = pickNextPhone()) {
+                    is QueueDecision.Process -> processPhone(decision.phone)
+                    is QueueDecision.Wait -> {
+                        lastLog = decision.reason
+                        updateNotification()
+                        onUpdate?.invoke()
+                        scheduleNextRun(decision.delayMs)
+                    }
+                }
+            } catch (e: Exception) {
+                val now = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date())
+                val time = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
+                lastLog = "Error: ${e.message.orEmpty()}"
+                saveLog(
+                    this@RecommendationService,
+                    "[$now $time] ERROR: ${e.javaClass.simpleName}: ${sanitizeLog(e.message.orEmpty())}",
+                )
                 updateNotification()
                 onUpdate?.invoke()
                 scheduleNextRun(PAUSE_POLL_MS)
-                return
-            }
-
-            when (val decision = pickNextPhone()) {
-                is QueueDecision.Process -> processPhone(decision.phone)
-                is QueueDecision.Wait -> {
-                    lastLog = decision.reason
-                    updateNotification()
-                    onUpdate?.invoke()
-                    scheduleNextRun(decision.delayMs)
-                }
             }
         }
     }
@@ -129,7 +141,11 @@ class RecommendationService : Service() {
             failedCount = 0
             installedCount = 0
             generatedNumbers.clear()
+            val removed = ContactManager.deleteExceededRetryLimit(this)
             lastLog = "Started on ${SimSelection.getSelectedSimLabel(this)}"
+            if (removed > 0) {
+                saveLog(this, "[INFO] Removed $removed number(s) that exceeded retry limit")
+            }
             onUpdate?.invoke()
             startForeground(NOTIFICATION_ID, buildNotification())
             handler.post(worker)
@@ -268,7 +284,11 @@ class RecommendationService : Service() {
                                         ),
                                     )
                                 }
-                                ContactManager.updateLastAttempted(this, phone)
+                                val deleted = ContactManager.updateLastAttempted(this, phone)
+                                if (deleted) {
+                                    lastLog = "Deleted $phone after 7 retries"
+                                    saveLog(this, "[$now $time] AUTO DELETE [$simLabel]: $phone (retry limit)")
+                                }
                                 saveLog(this, "[$now $time] SUCCESS [$simLabel]: $phone")
                             }
 

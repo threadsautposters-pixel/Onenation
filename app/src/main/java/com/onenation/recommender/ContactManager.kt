@@ -41,6 +41,8 @@ object ContactManager {
     private const val KEY_GENERATED_BLOOM_COUNT_PREFIX = "gen_bloom_count_"
     private val retryFormatter = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
 
+    private const val MAX_DAILY_RETRY_COUNT = 7
+
     private const val GENERATED_BLOOM_BITS = 8_388_608
     private const val GENERATED_BLOOM_HASHES = 4
     private const val GENERATED_BLOOM_MAX_ITEMS_PER_LAYER = 350_000L
@@ -172,17 +174,24 @@ object ContactManager {
         }
     }
 
-    fun updateLastAttempted(context: Context, phone: String) {
+    fun updateLastAttempted(context: Context, phone: String): Boolean {
         val pending = getPending(context).toMutableList()
         val index = pending.indexOfFirst { it.phone == phone }
-        if (index < 0) return
+        if (index < 0) return false
+        val updatedRetryCount = pending[index].retryCount + 1
+        if (updatedRetryCount >= MAX_DAILY_RETRY_COUNT) {
+            pending.removeAt(index)
+            savePending(context, pending)
+            return true
+        }
         val nextRetryAt = System.currentTimeMillis() + 24L * 60L * 60L * 1000L
         pending[index] = pending[index].copy(
             lastAttempted = formatNow(),
-            retryCount = pending[index].retryCount + 1,
+            retryCount = updatedRetryCount,
             nextRetryTime = retryFormatter.format(Date(nextRetryAt)),
         )
         savePending(context, pending)
+        return false
     }
 
     fun getDueForRetry(context: Context): List<SavedNumber> {
@@ -206,6 +215,16 @@ object ContactManager {
         context.getSharedPreferences(P, Context.MODE_PRIVATE),
         KEY_PENDING,
     )
+
+    fun deleteExceededRetryLimit(context: Context): Int {
+        val pending = getPending(context)
+        val filtered = pending.filter { it.retryCount < MAX_DAILY_RETRY_COUNT }
+        val removed = pending.size - filtered.size
+        if (removed > 0) {
+            savePending(context, filtered)
+        }
+        return removed
+    }
 
     fun getInstalled(context: Context): List<SavedNumber> = parse(
         context.getSharedPreferences(P, Context.MODE_PRIVATE),
