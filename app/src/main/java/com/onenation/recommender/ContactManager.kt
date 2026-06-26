@@ -9,6 +9,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.BitSet
+import java.lang.Math.floorMod
 
 data class SavedNumber(
     val id: Long = System.currentTimeMillis(),
@@ -408,8 +409,10 @@ object ContactManager {
 
     private fun bloomIndex(h1: Long, h2: Long, round: Int): Int {
         val mixed = h1 + (h2 * (round.toLong() + 1L))
-        val positive = mixed xor (mixed ushr 63)
-        return (positive % GENERATED_BLOOM_BITS.toLong()).toInt()
+        // NOTE: We must ALWAYS return an index in [0, GENERATED_BLOOM_BITS),
+        // otherwise BitSet.get/set can crash with "bitIndex < 0".
+        // Using floorMod avoids negatives even for overflow / Long.MIN_VALUE edge cases.
+        return floorMod(mixed, GENERATED_BLOOM_BITS.toLong()).toInt()
     }
 
     private fun hashPair(input: String): Pair<Long, Long> {
